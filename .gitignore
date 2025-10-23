@@ -1,6 +1,6 @@
 ansible-navigator.log
 # Finalmente el invenory, ya que AAP no lo necesita:
-inventory/
+#inventory/
 logs/
 .vscode
 debug_collections.yml
