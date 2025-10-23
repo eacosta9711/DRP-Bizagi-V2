@@ -1,6 +1,0 @@
----
-# inventory/scm_inventory.yml
-plugin: ini
-name: SCM Hosts Bizagi
-sources:
-  - hosts
