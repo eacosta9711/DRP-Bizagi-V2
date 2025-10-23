@@ -1,0 +1,63 @@
+{
+  "@type": "MessageCard",
+  "@context": "http://schema.org/extensions",
+  "summary": "{{ notification_title | default('Notificación de Ansible') }}",
+  "themeColor": "{% if deployment_status == 'success' %}28a745{% else %}dc3545{% endif %}",
+  "sections": [
+    {
+      "activityTitle": "{{ card_title | default('Ansible Deployment') }}",
+      "activitySubtitle": "{{ card_subtitle | default(playbook_name) }}",
+      "activityImage": "{{ teams_config.urls.ansible_logo | default('https://raw.githubusercontent.com/ansible/logos/main/ansible-logos/Ansible-Mark-RGB_Black.png') }}",
+      "facts": [
+        {
+          "name": "Estado",
+          "value": "{{ deployment_status | upper }}"
+        },
+        {
+          "name": "Fecha y Hora",
+          "value": "{{ execution_date }} - {{ execution_time }}"
+        },
+        {
+          "name": "Playbook",
+          "value": "{{ playbook_name }}"
+        },
+        {
+          "name": "Host",
+          "value": "{{ target_host }}"
+        }{% if execution_user is defined %},
+        {
+          "name": "Ejecutado por",
+          "value": "{{ execution_user }}"
+        }{% endif %}{% if duration is defined %},
+        {
+          "name": "Duración",
+          "value": "{{ duration }}"
+        }{% endif %}
+      ],
+      "markdown": true,
+      "text": "**Resumen:** La ejecución del playbook Ansible *{{ playbook_name }}* se completó el {{ execution_timestamp }}."
+    }
+  ]{% if show_buttons | default(false) %},
+  "potentialAction": [
+    {
+      "@type": "OpenUri",
+      "name": "Ver Logs",
+      "targets": [
+        {
+          "os": "default",
+          "uri": "{{ logs_url | default('#') }}"
+        }
+      ]
+    }{% if dashboard_url is defined %},
+    {
+      "@type": "OpenUri", 
+      "name": "Dashboard",
+      "targets": [
+        {
+          "os": "default",
+          "uri": "{{ dashboard_url }}"
+        }
+      ]
+    }{% endif %}
+  ]{% endif %}
+}

@@ -1,0 +1,39 @@
+# roles/sql_failover/tasks/main.yml (VERSIÓN FINAL Y SIMPLIFICADA)
+---
+# 1. Valida los parámetros requeridos.
+# 2. Ejecuta las validaciones de prerrequisitos en ambos servidores.
+# 3. Incluye las tareas de ejecución solo en el servidor primario actual.
+# 4. Incluye las tareas post-failover solo en el servidor que será el nuevo primario.
+
+- name: "(FAIL) - Validar parámetros requeridos del rol"
+  ansible.builtin.fail:
+    msg: "Parámetro requerido del rol faltante: {{ item }}"
+  when: vars[item] is not defined or vars[item] | length == 0
+  loop:
+    - primary_server
+    - secondary_server
+    - db_name
+
+- name: "Validar que el modo de autenticación sea válido"
+  ansible.builtin.assert:
+    that:
+      - sql_auth_mode in ['windows', 'sql']
+    fail_msg: "El modo de autenticación '{{ sql_auth_mode }}' no es válido. Use 'windows' o 'sql'."
+
+- name: "(INFORMATIVO) - Recopilando facts de Windows"
+  ansible.windows.setup:
+  when: ansible_facts.os_family is not defined
+
+- name: "Incluir tareas de validación de prerrequisitos"
+  ansible.builtin.include_tasks:
+    file: validate_prerequisites.yml
+
+- name: "Incluir tareas de ejecución del failover"
+  ansible.builtin.include_tasks:
+    file: execute_failover.yml
+  when: inventory_hostname == primary_server
+
+- name: "Incluir tareas post-failover en el nuevo servidor principal"
+  ansible.builtin.include_tasks:
+    file: post_failover_tasks.yml
+  when: inventory_hostname == secondary_server

@@ -1,0 +1,3 @@
+---
+# defaults file for roles/cards
+cards_notification_platform: "google_chat" # google_chat, teams, slack.

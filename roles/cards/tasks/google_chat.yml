@@ -1,0 +1,31 @@
+---
+- name: Generar payload desde template
+  ansible.builtin.set_fact:
+    chat_payload: "{{ lookup('template', 'roles/cards/templates/google_chat_card.json.j2') }}"
+
+- name: Debug - Mostrar payload generado
+  ansible.builtin.debug:
+    var: chat_payload
+  when: ansible_verbosity >= 1
+
+- name: Enviar notificación
+  ansible.builtin.uri:
+    url: "{{ cards_google_chat.webhook_url }}"
+    method: POST
+    body_format: json
+    body: "{{ chat_payload }}"
+    headers:
+      Content-Type: "application/json; charset=UTF-8"
+    status_code: 200
+  ignore_errors: false
+  register: cards_google_chat_result
+
+- name: Mostrar resultado exitoso
+  ansible.builtin.debug:
+    msg: "OK: Enviada exitosamente a Google Chat"
+  when: cards_google_chat_result.status == 200
+
+- name: Mostrar error en caso de fallo
+  ansible.builtin.debug:
+    msg: "ERROR: Al enviar notificación: {{ cards_google_chat_result.msg | default('Error desconocido') }}"
+  when: cards_google_chat_result.status != 200

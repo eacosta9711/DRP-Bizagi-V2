@@ -1,0 +1,107 @@
+---
+# Play 1: Validaciones en localhost
+- name: "Validar Parámetros para Limpieza de Caché"
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: "(VALIDACIÓN) - Parámetro 'target_group' requerido"
+      ansible.builtin.assert:
+        that:
+          - target_group is defined and target_group | length > 0
+        fail_msg: "ERROR: Debes definir la variable 'target_group'."
+        success_msg: "Parámetro 'target_group' definido."
+
+    - name: "(VALIDACIÓN) - Grupo existe en el inventario"
+      ansible.builtin.assert:
+        that:
+          - target_group in groups
+        fail_msg: "ERROR: El grupo '{{ target_group }}' no se encontró."
+        success_msg: "El grupo '{{ target_group }}' existe."
+
+    - name: "(RESUMEN) - Plan de Ejecución"
+      ansible.builtin.debug:
+        msg:
+          - "========================================================"
+          - "  PLAN DE LIMPIEZA DE CACHÉ DE WINDOWS"
+          - "========================================================"
+          - "  ‣ Grupo Destino: {{ target_group }}"
+          - "  ‣ Servidores Afectados: {{ groups[target_group] | join(', ') }}"
+          - "========================================================"
+
+# Play 2: Ejecución en el grupo de servidores de destino
+- name: "Ejecutar Limpieza de Caché en Servidores Windows"
+  hosts: "{{ target_group }}"
+  gather_facts: true
+  vars:
+    excluded_profiles: ['All Users', 'Default', 'Default User', 'Public']
+  tasks:
+    - name: "(PREREQUISITO) - Confirmar que es un servidor Windows"
+      ansible.builtin.assert:
+        that:
+          - ansible_os_family == 'Windows'
+        fail_msg: "ERROR: Este playbook solo funciona en Windows."
+        success_msg: "Es un servidor Windows."
+
+    - name: 'Limpiando caché del sistema (C:\Windows\Temp) de forma rápida'
+      ansible.windows.win_powershell:
+        script: |
+          $Path = 'C:\Windows\Temp'
+          if (Test-Path -Path $Path) {
+            Get-ChildItem -Path $Path -Recurse -Force | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+            Write-Host "Comando de limpieza para C:\Windows\Temp ejecutado."
+          } else {
+            Write-Host "La carpeta C:\Windows\Temp no existe."
+          }
+      changed_when: true # Asumimos que siempre hay algo que limpiar
+
+    - name: 'Limpiando caché de perfiles de usuario de forma rápida'
+      block:
+        - name: "Encontrando perfiles de usuario en C:\\Users"
+          ansible.windows.win_find:
+            paths: C:\Users
+            file_type: directory
+            depth: 0
+          register: user_profiles
+
+        - name: "Construyendo lista de carpetas temporales de usuarios"
+          ansible.builtin.set_fact:
+            user_temp_paths: >-
+              {{ user_temp_paths | default([]) + [ item.path + '\\AppData\\Local\\Temp' ] }}
+          loop: "{{ user_profiles.files }}"
+          when: item.filename not in excluded_profiles
+
+        - name: "Ejecutando limpieza de PowerShell para cada perfil"
+          ansible.windows.win_powershell:
+            script: |
+              $Path = '{{ item }}'
+              if (Test-Path -Path $Path) {
+                Get-ChildItem -Path $Path -Recurse -Force | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+              }
+          loop: "{{ user_temp_paths | default([]) }}"
+          loop_control:
+            label: "Limpiando {{ item }}"
+          changed_when: true
+
+    - name: "(REPORTE FINAL) - Comandos de limpieza ejecutados"
+      ansible.builtin.debug:
+        msg: |
+          ========================================================
+            REPORTE FINAL DE LIMPIEZA DE CACHÉ
+          ========================================================
+            ‣ Servidor: {{ inventory_hostname }}
+          --------------------------------------------------------
+            RESUMEN:
+            - Se ejecutaron los comandos de limpieza de PowerShell
+              para la caché del sistema y de los perfiles de usuario.
+          ========================================================
+
+    - name: "Registrando estadísticas como artefacto en AAP"
+      ansible.builtin.set_stats:
+        data:
+          windows_cache_cleanup_stats:
+            host: "{{ inventory_hostname }}"
+            status: "Completado"
+            system_temp_cleaned: true
+            user_profiles_processed_count: "{{ user_temp_paths | default([]) | length }}"
+            user_profiles_processed_paths: "{{ user_temp_paths | default([]) }}"
+            timestamp: "{{ ansible_date_time.iso8601 }}"

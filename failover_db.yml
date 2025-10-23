@@ -1,0 +1,93 @@
+# failover_db.yml (VERSIÓN FINAL CON CORRECCIÓN DE VARIABLE)
+---
+# ==============================================================================
+# PLAYBOOK CON LÓGICA DE DESCUBRIMIENTO DISTRIBUIDO
+# 1. Cada servidor Windows reporta su propio estado.
+# 2. Localhost centraliza la información y decide.
+# 3. El rol se ejecuta solo si es necesario.
+# ==============================================================================
+
+# Play 1: Fase de Descubrimiento en los Servidores SQL
+- name: "Paso 1/3: Cada servidor reporta su propio estado"
+  hosts: "{{ production_server }},{{ contingency_server }}"
+  gather_facts: false
+
+  tasks:
+    - name: "Consultar estado de la base de datos local"
+      ansible.windows.win_powershell:
+        script: "Invoke-Sqlcmd -ServerInstance '{{ inventory_hostname }}' -Query \"SELECT state_desc FROM sys.databases WHERE name = '{{ db_name }}';\""
+      register: db_status_result
+      ignore_errors: true
+
+    - name: "Guardar el estado detectado"
+      ansible.builtin.set_fact:
+        db_state: >-
+          {% if not db_status_result.failed and db_status_result.output | length > 0 %}
+          {{ db_status_result.output[0].state_desc | trim }}
+          {% else %}
+          UNAVAILABLE
+          {% endif %}
+        cacheable: yes
+
+# Play 2: Fase de Decisión en Localhost
+- name: "Paso 2/3: Analizar resultados y decidir si el failover es necesario"
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    prod_state: "{{ hostvars[production_server]['db_state'] | default('UNAVAILABLE') | trim }}"
+    cont_state: "{{ hostvars[contingency_server]['db_state'] | default('UNAVAILABLE') | trim }}"
+
+  tasks:
+    - name: "Determinar el estado actual del sistema"
+      ansible.builtin.set_fact:
+        current_primary: >-
+          {% if 'ONLINE' in prod_state %}
+          {{ production_server }}
+          {% elif 'ONLINE' in cont_state %}
+          {{ contingency_server }}
+          {% else %}
+          UNKNOWN
+          {% endif %}
+        cacheable: yes
+
+    
+    - name: "Definir el servidor de destino"
+      ansible.builtin.set_fact:
+        target_server: "{{ (production_server if failover_target == 'produccion' else contingency_server) | trim }}"
+        cacheable: yes
+    
+    - name: "Decidir si el failover es necesario"
+      ansible.builtin.set_fact:
+        failover_required: "{{ target_server != (current_primary | trim) and (current_primary | trim) != 'UNKNOWN' }}"
+        cacheable: yes
+    
+
+    - name: "Mostrar Resumen del Diagnóstico"
+      ansible.builtin.debug:
+        msg:
+          - "==============================================================="
+          - "               DIAGNÓSTICO DEL SISTEMA"
+          - "==============================================================="
+          - " Estado de Producción:   '{{ prod_state }}'"
+          - " Estado de Contingencia: '{{ cont_state }}'"
+          - "---------------------------------------------------------------"
+          - " Servidor Primario Actual Detectado: '{{ current_primary | trim }}'"
+          - " Entorno de Destino Solicitado:      '{{ failover_target | upper }}'"
+          - "---------------------------------------------------------------"
+          - " ¿Se requiere failover?: {{ 'SÍ' if failover_required else 'NO, el sistema ya está en el estado deseado o el estado es desconocido.' }}"
+          - "==============================================================="
+
+# Play 3: Ejecución Condicional del Failover
+- name: "Paso 3/3: Ejecutar Rol de Failover (si es necesario)"
+  hosts: "{{ hostvars['localhost']['production_server'] }},{{ hostvars['localhost']['contingency_server'] }}"
+  gather_facts: false
+  
+  tasks:
+    - name: "Incluir rol de failover"
+      ansible.builtin.include_role:
+        name: sql_failover
+      vars:
+        primary_server: "{{ hostvars['localhost']['current_primary'] | trim }}"
+        secondary_server: "{{ hostvars['localhost']['target_server'] | trim }}"
+      when: hostvars['localhost']['failover_required'] | bool

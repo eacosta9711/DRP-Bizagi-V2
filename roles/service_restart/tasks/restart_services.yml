@@ -1,0 +1,95 @@
+---
+# tasks/restart_services.yml
+
+- name: "Mostrar información previa a la acción"
+  ansible.builtin.debug:
+    msg:
+      - "═════════════════════════════════════════"
+      - "INICIANDO ACCIÓN SOBRE SERVICIOS"
+      - "═════════════════════════════════════════"
+      - "Acción a ejecutar: {{ service_restart_action | upper }}"
+      - "Servicios a procesar: {{ existing_services | length }}"
+      - "Dependencias: {{ 'FORZAR' if service_restart_force_dependent_services else 'RESPETAR' }}"
+      - "Hora de inicio: {{ ansible_date_time.time }}"
+      - "═════════════════════════════════════════"
+
+- name: "Ejecutar '{{ service_restart_action }}' en servicios existentes"
+  ansible.windows.win_service:
+    name: "{{ item }}"
+    state: "{{ ansible_action_state }}"
+    force_dependent_services: "{{ service_restart_force_dependent_services }}"
+  register: service_restart_results
+  loop: "{{ existing_services }}"
+  failed_when: false
+
+- name: "Esperar estabilización de servicios"
+  ansible.builtin.pause:
+    seconds: 3
+  when: existing_services | length > 0
+
+- name: "Obtener estado final de servicios"
+  ansible.windows.win_service:
+    name: "{{ item }}"
+  register: final_service_status
+  loop: "{{ existing_services }}"
+
+- name: "Procesar resultados de la acción"
+  ansible.builtin.set_fact:
+    restart_results: >-
+      {%- set results = {} -%}
+      {%- for result in service_restart_results.results -%}
+        {%- set final_state = (final_service_status.results | selectattr('name', 'equalto', result.name) | first) -%}
+        {%- set _ = results.update({
+          result.name: {
+            'restart_success': not result.failed,
+            'restart_error': result.msg if result.failed else '',
+            'initial_state': services_initial_state[result.name].state,
+            'final_state': final_state.state,
+            'state_changed': services_initial_state[result.name].state != final_state.state,
+            'is_running': final_state.state == 'running'
+          }
+        }) -%}
+      {%- endfor -%}
+      {{ results }}
+
+- name: "Mostrar reporte visual de la acción"
+  ansible.builtin.debug:
+    msg:
+      - "╔═══════════════════════════════════════════════════════════════"
+      - "║              REPORTE DE ACCIÓN EN SERVICIOS                   "
+      - "╠═══════════════════════════════════════════════════════════════"
+      - "║ Servidor: {{ inventory_hostname }}"
+      - "║ Task ID: {{ service_restart_task_id }}"
+      - "║ Fecha: {{ ansible_date_time.date }} {{ ansible_date_time.time }}"
+      - "╠═══════════════════════════════════════════════════════════════"
+      - "║ RESULTADOS POR SERVICIO:"
+      - "║{% for service, details in restart_results.items() %} {{ service }}: {{ 'EXITOSO' if details.restart_success else 'FALLÓ' }} ({{ details.initial_state }} → {{ details.final_state }}){% endfor %}"
+      - "╠═══════════════════════════════════════════════════════════════"
+      - "║ RESUMEN:"
+      - "║ Total servicios: {{ restart_results | length }}"
+      - "║ Exitosos: {{ restart_results.values() | selectattr('restart_success', 'equalto', true) | list | length }}"
+      - "║ Fallidos: {{ restart_results.values() | selectattr('restart_success', 'equalto', false) | list | length }}"
+      - "║ Corriendo: {{ restart_results.values() | selectattr('is_running', 'equalto', true) | list | length }}"
+      - "╚═══════════════════════════════════════════════════════════════"
+
+- name: "Mostrar detalles de servicios fallidos"
+  ansible.builtin.debug:
+    msg:
+      - "═════════════════════════════════════════"
+      - "SERVICIOS CON ERRORES"
+      - "═════════════════════════════════════════"
+      - "{% for service, details in restart_results.items() %}{% if not details.restart_success %}{{ service }}:
+        {{ details.restart_error }}{% endif %}{% endfor %}"
+      - "═════════════════════════════════════════"
+  when: restart_results.values() | selectattr('restart_success', 'equalto', false) | list | length > 0
+
+- name: "Mostrar confirmación de éxito"
+  ansible.builtin.debug:
+    msg:
+      - "═════════════════════════════════════════"
+      - "ACCIÓN COMPLETADA EXITOSAMENTE"
+      - "═════════════════════════════════════════"
+      - "Todos los servicios fueron procesados correctamente"
+      - "Servicios corriendo: {{ restart_results.values() | selectattr('is_running', 'equalto', true) | list | length }}/{{ restart_results | length }}"
+      - "═════════════════════════════════════════"
+  when: restart_results.values() | selectattr('restart_success', 'equalto', false) | list | length == 0

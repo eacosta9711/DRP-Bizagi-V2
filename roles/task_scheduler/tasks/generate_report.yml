@@ -1,0 +1,55 @@
+---
+# tasks/generate_report.yml
+- name: "Crear estadísticas finales"
+  ansible.builtin.set_fact:
+    task_stats:
+      server: "{{ inventory_hostname }}"
+      server_role: "{{ task_scheduler_server_role }}"
+      task_name: "{{ task_scheduler_task_name }}"
+      active_environment: "{{ task_scheduler_active_environment }}"
+      should_be_enabled: "{{ task_scheduler_should_enable }}"
+      was_changed: "{{ final_task_state.changed }}"
+      final_enabled: "{{ final_task_state.enabled }}"
+      action_taken: "{{ final_task_state.action }}"
+      success: "{{ final_task_state.success }}"
+      timestamp: "{{ ansible_date_time.iso8601 }}"
+
+- name: "Mostrar reporte visual final"
+  ansible.builtin.debug:
+    msg:
+      - "╔═══════════════════════════════════════════════════════════════"
+      - "║         REPORTE FINAL - {{ inventory_hostname | upper }}"
+      - "╠═══════════════════════════════════════════════════════════════"
+      - "║ Servidor: {{ inventory_hostname }} ({{ task_scheduler_server_role | upper }})"
+      - "║ Tarea: {{ task_scheduler_task_name }}"
+      - "║ Ambiente activo: {{ task_scheduler_active_environment | upper }}"
+      - "║ Fecha: {{ ansible_date_time.date }} {{ ansible_date_time.time }}"
+      - "╠═══════════════════════════════════════════════════════════════"
+      - "║ RESULTADO:"
+      - "║ Estado final: {{ 'HABILITADA' if final_task_state.enabled else 'DESHABILITADA' }}"
+      - "║ Cambio realizado: {{ 'SÍ' if final_task_state.changed else 'NO' }}"
+      - "║ Acción: {{ final_task_state.action }}"
+      - "║ Estado: {{ 'ÉXITO' if final_task_state.success else 'ERROR' }}"
+      - "╚═══════════════════════════════════════════════════════════════"
+
+- name: "Registrar estadísticas en AWX"
+  ansible.builtin.set_stats:
+    data:
+      "task_scheduler_{{ inventory_hostname }}":
+        server_info: "{{ task_stats }}"
+        status: "{{ 'success' if final_task_state.success else 'failed' }}"
+      task_scheduler_summary:
+        active_environment: "{{ task_scheduler_active_environment }}"
+        total_servers: "{{ groups['all'] | length }}"
+        timestamp: "{{ ansible_date_time.iso8601 }}"
+    per_host: false
+
+- name: "Confirmar finalización"
+  ansible.builtin.debug:
+    msg:
+      - "════════════════════════════════════════════"
+      - "{{ 'CONFIGURACIÓN COMPLETADA' if final_task_state.success else 'ERROR EN CONFIGURACIÓN' }}"
+      - "════════════════════════════════════════════"
+      - "Servidor: {{ inventory_hostname }}"
+      - "Estado: {{ 'HABILITADA' if final_task_state.enabled else 'DESHABILITADA' }}"
+      - "════════════════════════════════════════════"

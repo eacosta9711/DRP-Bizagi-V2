@@ -1,0 +1,59 @@
+#!/bin/bash
+# Template Bash para conectividad desde Linux
+
+declare -a results=()
+total_tests=0
+success_count=0
+
+{% if test_connection_check_type in ['telnet', 'ambos'] %}
+# ===================
+# TESTS TELNET
+# ===================
+{% for host in test_connection_target_hosts %}
+{% for port in test_connection_ports %}
+total_tests=$((total_tests + 1))
+
+# Timeout de 5 segundos para telnet
+if timeout 5 bash -c "echo >/dev/tcp/{{ host }}/{{ port }}" 2>/dev/null; then
+    results+=("TELNET {{ host }}:{{ port }} = SUCCESS")
+    success_count=$((success_count + 1))
+else
+    results+=("TELNET {{ host }}:{{ port }} = FAILED")
+fi
+
+sleep 0.1
+{% endfor %}
+{% endfor %}
+{% endif %}
+
+{% if test_connection_check_type in ['ping', 'ambos'] %}
+# ===================
+# TESTS PING
+# ===================
+{% for host in test_connection_target_hosts %}
+total_tests=$((total_tests + 1))
+
+if ping -c 5 {{ host }} >/dev/null 2>&1; then
+    results+=("PING {{ host }} = SUCCESS")
+    success_count=$((success_count + 1))
+else
+    results+=("PING {{ host }} = FAILED")
+fi
+
+sleep 0.1
+{% endfor %}
+{% endif %}
+
+# Mostrar resultados
+for result in "${results[@]}"; do
+    echo "$result"
+done
+
+# Resumen
+success_rate=0
+if [ $total_tests -gt 0 ]; then
+    success_rate=$(echo "scale=2; ($success_count / $total_tests) * 100" | bc -l 2>/dev/null || echo "0")
+fi
+
+echo ""
+echo "RESUMEN: $success_count/$total_tests exitosos (${success_rate}%)"

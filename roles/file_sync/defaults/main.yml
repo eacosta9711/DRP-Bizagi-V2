@@ -1,0 +1,21 @@
+---
+# defaults/main.yml for roles/file_sync
+
+file_sync_task_id: "sync_task"
+file_sync_description: "File synchronization"
+
+# Servidores específicos (reemplaza grupos)
+file_sync_source_server: ""
+file_sync_target_server: ""
+
+# Configuración de archivos
+file_sync_comparison_path: "D:\\Mis Documentos"
+file_sync_file_patterns: ["*.bat", "*.ps1"]
+
+# Opciones de sincronización
+file_sync_execute_copy: false
+file_sync_robocopy_flags: "/E /XO /R:3 /W:10 /MT:4"
+
+# Timeouts
+file_sync_timeout: 300
+file_sync_retries: 3

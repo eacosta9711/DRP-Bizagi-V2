@@ -1,0 +1,63 @@
+# roles/sql_failover/tasks/validate_prerequisites.yml (Versión Final con Actualización)
+---
+# Realiza todas las comprobaciones previas en el servidor de destino.
+
+- name: "INICIO - Tareas de Validación de Prerrequisitos en {{ inventory_hostname }}"
+  ansible.builtin.debug:
+    msg: "Comenzando validaciones en el servidor {{ inventory_hostname }}..."
+
+- name: "Prerrequisito 1/5: Validar que el servidor es Windows"
+  ansible.builtin.assert:
+    that: ansible_os_family == "Windows"
+    fail_msg: "El servidor {{ inventory_hostname }} no es Windows."
+    success_msg: "OK: El servidor es Windows."
+
+- name: "Prerrequisito 2/5: Garantizar que el puerto SQL ({{ sql_port }}) esté permitido en el Firewall (Optimizado)"
+  ansible.windows.win_powershell:
+    script: |
+      # Búsqueda optimizada directamente por filtro de puerto.
+      $portFilter = Get-NetFirewallPortFilter -Protocol TCP | Where-Object { $_.LocalPort -eq "{{ sql_port }}" }
+      $ruleExists = $portFilter | Get-NetFirewallRule | Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' -and $_.Action -eq 'Allow' }
+
+      if ($null -ne $ruleExists) {
+          Write-Host "El puerto {{ sql_port }} ya está permitido por una regla existente."
+      } else {
+          $ruleName = "Ansible - Allow SQL Port ({{ sql_port }})"
+          New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Action Allow -Protocol TCP -LocalPort {{ sql_port }}
+          Write-Host "Regla de firewall '$ruleName' creada para permitir el puerto {{ sql_port }}."
+      }
+  register: firewall_1433_result
+  changed_when: "'creada' in firewall_1433_result.host_out"
+
+- name: "Prerrequisito 3/5: Garantizar que el puerto Mirroring ({{ mirroring_port }}) esté permitido en el Firewall (Optimizado)"
+  ansible.windows.win_powershell:
+    script: |
+      # Búsqueda optimizada directamente por filtro de puerto.
+      $portFilter = Get-NetFirewallPortFilter -Protocol TCP | Where-Object { $_.LocalPort -eq "{{ mirroring_port }}" }
+      $ruleExists = $portFilter | Get-NetFirewallRule | Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' -and $_.Action -eq 'Allow' }
+
+      if ($null -ne $ruleExists) {
+          Write-Host "El puerto {{ mirroring_port }} ya está permitido por una regla existente."
+      } else {
+          $ruleName = "Ansible - Allow Mirroring Port ({{ mirroring_port }})"
+          New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Action Allow -Protocol TCP -LocalPort {{ mirroring_port }}
+          Write-Host "Regla de firewall '$ruleName' creada para permitir el puerto {{ mirroring_port }}."
+      }
+  register: firewall_5022_result
+  changed_when: "'creada' in firewall_5022_result.host_out"
+
+- name: "Prerrequisito 4/5: Garantizar que el protocolo TCP/IP esté habilitado (Omitido)"
+  ansible.builtin.debug:
+    msg: "ADVERTENCIA: Se omite la validación del protocolo TCP/IP. Se asume que está habilitado."
+
+- name: "Prerrequisito 5/5: Mostrar resumen de validaciones"
+  ansible.builtin.debug:
+    msg:
+      - "==============================================================="
+      - "          RESUMEN DE PRERREQUISITOS en {{ inventory_hostname }}"
+      - "==============================================================="
+      - " [✓] Sistema Operativo: Windows"
+      - " [✓] Firewall Puerto SQL ({{ sql_port }}): Permitido"
+      - " [✓] Firewall Puerto Mirroring ({{ mirroring_port }}): Permitido"
+      - " [!] Protocolo TCP/IP en SQL: Omitido"
+      - "==============================================================="

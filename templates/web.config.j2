@@ -1,0 +1,457 @@
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <configSections>
+    <section name="bizAgiWFESTouchPoints" type="BizAgi.WFES.TP.CTouchPointsSectionHandler,BizAgi.WFES" />
+    <!-- Uncomment for federate authentication -->
+    <!--<section name="microsoft.identityModel" type="Microsoft.IdentityModel.Configuration.MicrosoftIdentityModelSection, Microsoft.IdentityModel, Version=3.5.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35" />-->
+  </configSections>
+  <!-- Headers to allow crossDomain in  FormsAuthentication-->
+  <!--<system.webServer>
+    <httpProtocol>
+      <customHeaders>
+        <add name="Access-Control-Allow-Origin" value="http://yourcustomapp.ge.com " />
+        <add name="Access-Control-Allow-Credentials" value="true" />
+      </customHeaders>
+    </httpProtocol>
+  </system.webServer>-->
+  <startup useLegacyV2RuntimeActivationPolicy="true">
+    <supportedRuntime version="v4.0" sku=".NETFramework,Version=v4.0" />
+  </startup>
+  <system.serviceModel>
+    <diagnostics>
+      <messageLogging logEntireMessage="true" logMalformedMessages="true" logMessagesAtServiceLevel="false" logMessagesAtTransportLevel="true" maxMessagesToLog="2147483647" maxSizeOfMessageToLog="2147483647" />
+    </diagnostics>
+  </system.serviceModel>
+  <system.diagnostics>
+    <sources>
+      <source name="System.ServiceModel.MessageLogging" switchValue="All">
+        <listeners>
+          <add name="traceListener" />
+        </listeners>
+      </source>
+    </sources>
+    <trace autoflush="true" />
+    <sharedListeners>
+      <add name="traceListener" type="BizAgi.Interop.SoapTrace.InterfaceTraceVersion02, BizAgi.Interop,Culture=neutral, PublicKeyToken=null">
+        <filter type="BizAgi.Interop.SoapTrace.InterfaceTraceVersion02Filter, BizAgi.Interop,Culture=neutral, PublicKeyToken=null" />
+      </add>
+    </sharedListeners>
+  </system.diagnostics>
+  <!-- *** WFES TouchPoints -->
+  <!--<bizAgiWFESTouchPoints>
+  <touchPointsComponent assemblyName="TestTP.dll" />
+ </bizAgiWFESTouchPoints>-->
+ 
+
+  <appSettings>
+
+    <add key="ActivarTrazasIn" value="true" />
+    <!-- Parámetro para activar o desactivar las trazas de invocación de otros servicios-->
+    <add key="ActivarTrazasOut" value="false" />
+    <!-- Parámetro que indica la ruta de almacenamiento de trazas-->
+    <add key="TracesFolder" value="..\\Temporary\\SOAP_Traces\\" />
+    <add key="DSNDB" value="Current Language=us_english;Initial Catalog=BancaPersonaDB;Data Source={{ db_data_source }};User ID=C_BIZAGI;Password=CRYPT.1:RDGuaJtBBKvDmRQ96nSnrw==;" />
+    <add key="REMOTE_CACHE_SYNCHRONIZATION_TYPE" value="DB" />
+    <add key="PROVIDERTYPE" value="MSSqlClient" />
+    <add key="Project" value="BancaPersona" />
+    <add key="AssemblyName" value="BizAgi.Generated.dll" />
+    <add key="ButtonsAlignment" value="left" />
+    <add key="ActivateCatalog3" value="true" />
+    <add key="SAPDllVersion" value="3.0.0.42|50436dca5c7f7d23" />
+    <add key="AllowRemoteSynchronization" value="false" />
+    <add key="ShowDetailedAuthenticationMessage" value="false" />
+    <add key="MobileTokenLifetimeInMinutes" value="60" />
+    <add key="AllowOAuthApplications" value="true" />
+    <add key="SitesMetadataOAuth2ClientId" value="2de6518b-cc7b-4284-9dec-0241d58d919e" />
+    <add key="SitesMetadataOAuth2ClientSecret" value="7a9b8692-932c-4f5f-80db-e8cd31e598a9" />
+    <add key="SitesImagesOAuth2ClientId" value="2de6518b-cc7b-4284-9dec-0241d58d919e" />
+    <add key="SitesImagesOAuth2ClientSecret" value="7a9b8692-932c-4f5f-80db-e8cd31e598a9" />
+    <add key="SitesDataOAuth2RedirectUri" value="http://sadgvbpmapp2/BancaPersona/sites/editor.html;http://sadgvbpmapp2/BancaPersona/sites/;https://sadgvbpmapp2/BancaPersona/sites/editor.html;https://sadgvbpmapp2/BancaPersona/sites/" />
+    <add key="TLSSupport" value="Tls1.2" />
+    <add key="EnableXSRFDefense" value="true" />
+	
+	<add key="VisionDALogFileName" value="D:\Bizagi\Enterprise\Projects\BancaPersona\Trace" />
+	<add key="LogDAQueries" value="false" />
+	<add key="LogHugeResultSetsNumRows" value="1" />
+	<add key="LogHugeResultSetsBytes" value="1" />
+	<add key="LogSlowQueriesMillisecs" value="10" />
+	<add key="LogSlowTransactionsMillisecs" value="10" />
+	<add key="VisionDALogLinesPerFile" value="50000" /> 
+	 
+</appSettings>
+  <!--
+    For a description of web.config changes for .NET 4.5 see http://go.microsoft.com/fwlink/?LinkId=235367.
+
+    The following attributes can be set on the <httpRuntime> tag.
+      <system.Web>
+        <httpRuntime targetFramework="4.5" />
+      </system.Web>
+  -->
+  <system.web>
+    <httpCookies httpOnlyCookies="true" requireSSL="true" />
+    <!--  DYNAMIC DEBUG COMPILATION
+          Set compilation debug="true" to enable ASPX debugging.  Otherwise, setting this value to
+          false will improve runtime performance of this application.
+          Set compilation debug="true" to insert debugging symbols (.pdb information)
+          into the compiled page. Because this creates a larger file that executes
+          more slowly, you should set this value to true only when debugging and to
+          false at all other times. For more information, refer to the documentation about
+          debugging ASP .NET files.
+    -->
+    <!-- FormsAuthentication -->
+    <!--
+    <authentication mode="Forms">
+      <forms loginUrl="~/App/Inicio/Login.aspx" name=".BIZAGIFORMAUTH" protection="All" path="/" domain="corp.testauthforms.com" timeout="30"/>
+    </authentication>
+
+    <authorization>
+      <deny users="*"/>
+      <allow users="?"/>
+    </authorization>
+    -->
+    <machineKey validationKey="1A4B210F7B64EA67A8FCD54138B355D650A63C9C4815FCDDB74371322E6CFAB9B788311A2662C6CE64566EFA189702332741DF26B9786E139930821575A8C808" decryptionKey="80655B4317B67E51E4332C9EA2C3174B1939E5D62E81BB1A27F1CD10FF5EFE87" validation="SHA1" />
+    <compilation defaultLanguage="c#" debug="true" targetFramework="4.5.2" />
+    <!--  CUSTOM ERROR MESSAGES
+          Set customError mode values to control the display of user-friendly
+          error messages to users instead of error details (including a stack trace):
+
+          "On" Always display custom (friendly) messages
+          "Off" Always display detailed ASP.NET error information.
+          "RemoteOnly" Display custom (friendly) messages only to users not running
+          on the local Web server. This setting is recommended for security purposes, so
+          that you do not display application detail information to remote clients.
+    -->
+    <customErrors mode="Off" />
+    <!--  AUTHENTICATION
+          This section sets the authentication policies of the application. Possible modes are "Windows", "Forms",
+          "Passport" and "None"
+    -->
+    <!--authentication mode="Windows" /-->
+    <identity impersonate="false" password="" userName="" />
+    <!--  APPLICATION-LEVEL TRACE LOGGING
+          Application-level tracing enables trace log output for every page within an application.
+          Set trace enabled="true" to enable application trace logging.  If pageOutput="true", the
+          trace information will be displayed at the bottom of each page.  Otherwise, you can view the
+          application trace log by browsing the "trace.axd" page from your web application
+          root.
+    -->
+    <trace enabled="false" requestLimit="10" pageOutput="false" traceMode="SortByTime" localOnly="true" />
+    <!--  SESSION STATE SETTINGS
+          By default ASP .NET uses cookies to identify which requests belong to a particular session.
+          If cookies are not available, a session can be tracked by adding a session identifier to the URL.
+          To disable cookies, set sessionState cookieless="true".
+    -->
+    <sessionState mode="InProc" stateConnectionString="tcpip=127.0.0.1:42424" sqlConnectionString="data source=127.0.0.1;user id=sa;password=" cookieless="false" timeout="20" />
+    <!--  GLOBALIZATION
+          This section sets the globalization settings of the application.
+    -->
+    <globalization requestEncoding="utf-8" responseEncoding="utf-8" culture="en-US" />
+    <!--  WEB SERVICES
+          This section sets the web services settings of the application.
+    -->
+    <webServices>
+      <protocols>
+        <add name="HttpPost" />
+        <add name="HttpGet" />
+      </protocols>
+      <soapExtensionTypes>
+      <add type="BizagiSOATracer.TraceExtension,TraceExtension" priority="1" />
+      </soapExtensionTypes>						  
+   </webServices>
+    <xhtmlConformance mode="Legacy" />
+    <pages controlRenderingCompatibilityVersion="4.0" clientIDMode="AutoID" viewStateEncryptionMode="Always" />
+    <httpRuntime maxRequestLength="20480" maxUrlLength="1024" targetFramework="4.5" requestValidationMode="2.0" executionTimeout="200" />
+    <!-- Uncomment for federate authentication -->
+    <!--
+    <authentication mode="None" />
+    <authorization>
+      <deny users="?" />
+    </authorization>
+    -->
+  </system.web>
+  <system.webServer>
+    <httpProtocol>
+      <customHeaders>
+        <clear />
+        <add name="X-UA-Compatible" value="IE=Edge,chrome=IE8" />
+        <add name="x-content-type-options" value="nosniff" />
+        <add name="x-dns-prefetch-control" value="off" />
+	<add name="x-frame-controls" value="SAMEORIGIN" />
+	<add name="x-xss-protection" value="1; mode=block" />
+	<add name="Strict-Transport-Security" value="Strict-Transport-Security: max-age=31536000; includeSubDomains" />
+	<add name="content-security-policy" value="default-src: ‘self" />
+      </customHeaders>
+    </httpProtocol>
+    <modules runAllManagedModulesForAllRequests="true">
+      <remove name="WebDAVModule" />
+      <!-- Uncomment for federate authentication -->
+      <!--
+      <add name="WSFederationAuthenticationModule" type="BizAgi.Authentication.Federate.WebServerModules.BizagiFederationAuthenticationModule, BizAgi.Authentication" />
+      <add name="SessionAuthenticationModule" type="Microsoft.IdentityModel.Web.SessionAuthenticationModule, Microsoft.IdentityModel, Version=3.5.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35" />
+      -->
+    </modules>
+    <handlers>
+      <remove name="WebDAV" />
+      <remove name="ExtensionlessUrlHandler-Integrated-4.0" />
+      <remove name="OPTIONSVerbHandler" />
+      <remove name="TRACEVerbHandler" />
+      <add name="ExtensionlessUrlHandler-Integrated-4.0" path="*." verb="*" type="System.Web.Handlers.TransferRequestHandler" preCondition="integratedMode,runtimeVersionv4.0" />
+    </handlers>
+    <security>
+      <requestFiltering>
+        <requestLimits maxAllowedContentLength="27262976" maxUrl="8192" maxQueryString="4096" />
+      </requestFiltering>
+    </security>
+    <staticContent>
+      <remove fileExtension=".less" />
+      <mimeMap fileExtension=".less" mimeType="text/css;charset=UTF-8" />
+      <remove fileExtension=".test" />
+      <mimeMap fileExtension=".test" mimeType="application/force-download" />
+      <remove fileExtension=".woff" />
+      <mimeMap fileExtension=".woff" mimeType="application/font-woff" />
+      <remove fileExtension=".woff2" />
+      <mimeMap fileExtension=".woff2" mimeType="application/font-woff2" />
+      <remove fileExtension=".appcache" />
+      <mimeMap fileExtension=".appcache" mimeType="text/cache-manifest" />
+      <remove fileExtension=".json" />
+      <mimeMap fileExtension=".json" mimeType="application/json" />
+    </staticContent>
+    <!--
+      To better improve the http compression of your site, you must run the following comands from an administrator CMD in the IIS
+      %systemroot%\system32\inetsrv\APPCMD unlock config -section:system.webServer/httpCompression
+      %systemroot%\system32\inetsrv\APPCMD unlock config -section:system.webServer/serverRuntime
+      http://www.codeproject.com/Articles/242133/Making-the-most-out-of-IIS-compression-Part-1-conf
+     -->
+    <httpCompression directory="%SystemDrive%\inetpub\temp\IIS Temporary Compressed Files">
+      <scheme name="gzip" dll="%Windir%\system32\inetsrv\gzip.dll" staticCompressionLevel="9" dynamicCompressionLevel="6" />
+      <dynamicTypes>
+        <add mimeType="text/*" enabled="true" />
+        <add mimeType="message/*" enabled="true" />
+        <add mimeType="application/javascript" enabled="true" />
+        <add mimeType="application/json" enabled="true" />
+        <add mimeType="*/*" enabled="false" />
+      </dynamicTypes>
+      <staticTypes>
+        <add mimeType="text/*" enabled="true" />
+        <add mimeType="message/*" enabled="true" />
+        <add mimeType="application/javascript" enabled="true" />
+        <add mimeType="application/json" enabled="true" />
+        <add mimeType="*/*" enabled="false" />
+      </staticTypes>
+    </httpCompression>
+    <urlCompression doStaticCompression="true" doDynamicCompression="true" dynamicCompressionBeforeCache="true" />
+    <defaultDocument>
+      <files>
+        <clear />
+        <add value="index.html" />
+        <add value="Default.htm" />
+        <add value="Default.asp" />
+        <add value="index.htm" />
+        <add value="iisstart.htm" />
+        <add value="default.aspx" />
+      </files>
+    </defaultDocument>
+  </system.webServer>
+  <runtime>
+    <assemblyBinding xmlns="urn:schemas-microsoft-com:asm.v1">
+      <dependentAssembly>
+        <assemblyIdentity name="System.Net.Http.Formatting" publicKeyToken="31BF3856AD364E35" culture="neutral" />
+        <bindingRedirect oldVersion="0.0.0.0-5.2.3.0" newVersion="5.2.3.0" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="System.Web.Http" publicKeyToken="31BF3856AD364E35" culture="neutral" />
+        <bindingRedirect oldVersion="0.0.0.0-5.2.3.0" newVersion="5.2.3.0" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="vjslib" publicKeyToken="b03f5f7f11d50a3a" />
+        <bindingRedirect oldVersion="0.0.0.0-2.0.0.0" newVersion="2.0.0.0" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="vjsnativ" publicKeyToken="b03f5f7f11d50a3a" />
+        <bindingRedirect oldVersion="1.0.0.0-1.0.5000.0" newVersion="2.0.0.0" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="Microsoft.WindowsAzure.Storage" publicKeyToken="31bf3856ad364e35" culture="neutral" />
+        <bindingRedirect oldVersion="0.0.0.0-8.5.0.0" newVersion="8.5.0.0" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="System.Web.Http" publicKeyToken="31bf3856ad364e35" culture="neutral" />
+        <bindingRedirect oldVersion="0.0.0.0-5.2.3.0" newVersion="5.2.3.0" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="System.Net.Http.Formatting" publicKeyToken="31bf3856ad364e35" culture="neutral" />
+        <bindingRedirect oldVersion="0.0.0.0-5.2.3.0" newVersion="5.2.3.0" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="Bizagi.Cloud.Catalog.Common" publicKeyToken="68d3cc0c117b87cf" culture="neutral" />
+        <bindingRedirect oldVersion="0.0.0.0-1.3.0.70" newVersion="1.3.0.70" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="Bizagi.Cloud.Catalog.Proxy" publicKeyToken="68d3cc0c117b87cf" culture="neutral" />
+        <bindingRedirect oldVersion="0.0.0.0-1.0.0.22" newVersion="1.0.0.22" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="System.Xml" publicKeyToken="b77a5c561934e089" culture="neutral" />
+        <bindingRedirect oldVersion="0.0.0.0-4.0.0.0" newVersion="4.0.0.0" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="Newtonsoft.Json" publicKeyToken="30ad4fe6b2a6aeed" culture="neutral" />
+        <bindingRedirect oldVersion="0.0.0.0-10.0.0.0" newVersion="10.0.0.0" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="Bizagi.Cloud.Catalog.Client" publicKeyToken="68d3cc0c117b87cf" culture="neutral" />
+        <bindingRedirect oldVersion="0.0.0.0-1.3.0.70" newVersion="1.3.0.70" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="StackExchange.Redis.StrongName" publicKeyToken="c219ff1ca8c2ce46" culture="neutral" />
+        <bindingRedirect oldVersion="0.0.0.0-1.2.6.0" newVersion="1.2.6.0" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="Microsoft.IdentityModel.Clients.ActiveDirectory" publicKeyToken="31bf3856ad364e35" culture="neutral" />
+        <bindingRedirect oldVersion="0.0.0.0-2.29.0.1078" newVersion="2.29.0.1078" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="Microsoft.Data.Services.Client" publicKeyToken="31bf3856ad364e35" culture="neutral" />
+        <bindingRedirect oldVersion="0.0.0.0-5.8.3.0" newVersion="5.8.3.0" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="Microsoft.Data.OData" publicKeyToken="31bf3856ad364e35" culture="neutral" />
+        <bindingRedirect oldVersion="0.0.0.0-5.8.3.0" newVersion="5.8.3.0" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="Microsoft.Data.Edm" publicKeyToken="31bf3856ad364e35" culture="neutral" />
+        <bindingRedirect oldVersion="0.0.0.0-5.8.3.0" newVersion="5.8.3.0" />
+      </dependentAssembly>
+      <dependentAssembly>
+        <assemblyIdentity name="Microsoft.Azure.KeyVault.Core" publicKeyToken="31bf3856ad364e35" culture="neutral" />
+        <bindingRedirect oldVersion="0.0.0.0-2.0.0.0" newVersion="2.0.0.0" />
+      </dependentAssembly>
+    </assemblyBinding>
+  </runtime>
+  <!-- HARDERING FORMS AUTHENTICATION
+          This section hard security for forms Authentication
+    -->
+  <!--
+  <location path="WebServices">
+    <system.web>
+      <authorization>
+        <allow users="*"/>
+      </authorization>
+    </system.web>
+  </location>
+  -->
+  <!-- Uncomment for federate authentication -->
+  <!-- <microsoft.identityModel configSource="FederationAuth.config" /> -->
+  <location path="Config">
+    <system.web>
+      <authorization>
+        <allow users="*" />
+      </authorization>
+    </system.web>
+  </location>
+  <location path="jquery">
+    <system.web>
+      <authorization>
+        <allow users="*" />
+      </authorization>
+    </system.web>
+  </location>
+  <location path="css">
+    <system.web>
+      <authorization>
+        <allow users="*" />
+      </authorization>
+    </system.web>
+  </location>
+  <location path="img">
+    <system.web>
+      <authorization>
+        <allow users="*" />
+      </authorization>
+    </system.web>
+  </location>
+  <location path="Rest">
+    <system.web>
+      <authorization>
+        <allow users="*" />
+      </authorization>
+    </system.web>
+  </location>
+  <location path="Api">
+    <system.web>
+      <authorization>
+        <allow users="*" />
+      </authorization>
+    </system.web>
+  </location>
+  <location path="error.html">
+    <system.web>
+      <authorization>
+        <allow users="*" />
+      </authorization>
+    </system.web>
+  </location>
+  <location path="auth-error.html">
+    <system.web>
+      <authorization>
+        <allow users="*" />
+      </authorization>
+    </system.web>
+  </location>
+  <location path="favicon.ico">
+    <system.web>
+      <authorization>
+        <allow users="*" />
+      </authorization>
+    </system.web>
+  </location>
+  <location path="bizagi.cache.appcache">
+    <system.web>
+      <authorization>
+        <allow users="*" />
+      </authorization>
+    </system.web>
+  </location>
+  <location path="oauth2/server/authorize">
+    <system.web>
+      <authorization>
+        <allow users="*" />
+      </authorization>
+    </system.web>
+  </location>
+  <location path="oauth2/server/token">
+    <system.web>
+      <authorization>
+        <allow users="*" />
+      </authorization>
+    </system.web>
+  </location>
+  <location path="oauth2/server/approval">
+    <system.web>
+      <authorization>
+        <allow users="*" />
+      </authorization>
+    </system.web>
+  </location>
+  <location path="oauth2/server/logout">
+    <system.web>
+      <authorization>
+        <allow users="*" />
+      </authorization>
+    </system.web>
+  </location>
+  <location path="loginexternal.html">
+    <system.web>
+      <authorization>
+        <allow users="*" />
+      </authorization>
+    </system.web>
+  </location>
+  <location path="logout.html">
+    <system.web>
+      <authorization>
+        <allow users="*" />
+      </authorization>
+    </system.web>
+  </location>
+</configuration>

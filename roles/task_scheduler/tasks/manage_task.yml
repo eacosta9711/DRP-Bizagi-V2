@@ -1,0 +1,56 @@
+---
+# tasks/manage_task.yml
+- name: "Determinar si se requiere cambio"
+  ansible.builtin.set_fact:
+    change_required: "{{ current_task_state.enabled != task_scheduler_should_enable }}"
+
+- name: "Mostrar acción a realizar"
+  ansible.builtin.debug:
+    msg:
+      - "ANÁLISIS DE CAMBIO:"
+      - "Estado actual: {{ 'HABILITADA' if current_task_state.enabled else 'DESHABILITADA' }}"
+      - "Estado deseado: {{ 'HABILITADA' if task_scheduler_should_enable else 'DESHABILITADA' }}"
+      - "Cambio requerido: {{ 'SÍ' if change_required else 'NO' }}"
+      - "Acción: {{ 'HABILITAR' if task_scheduler_should_enable and change_required else 'DESHABILITAR'
+        if not task_scheduler_should_enable and change_required else 'MANTENER' }}"
+
+- name: "Aplicar cambio de estado de la tarea"
+  community.windows.win_scheduled_task:
+    name: "{{ task_scheduler_task_name }}"
+    enabled: "{{ task_scheduler_should_enable }}"
+  register: task_change_result
+  when: change_required
+
+- name: "Verificar el cambio aplicado"
+  community.windows.win_scheduled_task_stat:
+    name: "{{ task_scheduler_task_name }}"
+  register: updated_task_info
+  when: change_required
+
+- name: "Registrar resultado final"
+  ansible.builtin.set_fact:
+    final_task_state:
+      changed: "{{ change_required }}"
+      enabled: "{{ updated_task_info.settings.enabled if change_required else current_task_state.enabled }}"
+      state: "{{ updated_task_info.state.status if change_required else current_task_state.state }}"
+      action:
+        "{{ 'HABILITADA' if task_scheduler_should_enable and change_required else 'DESHABILITADA'
+        if not task_scheduler_should_enable and change_required else 'SIN CAMBIOS' }}"
+      success: "{{ task_change_result.changed | default(true) if change_required else true }}"
+
+- name: "Confirmar resultado"
+  ansible.builtin.debug:
+    msg:
+      - "RESULTADO:"
+      - "Cambio aplicado: {{ final_task_state.changed }}"
+      - "Estado final: {{ 'HABILITADA' if final_task_state.enabled else 'DESHABILITADA' }}"
+      - "Acción realizada: {{ final_task_state.action }}"
+  when: change_required
+
+- name: "Confirmar sin cambios"
+  ansible.builtin.debug:
+    msg:
+      - "SIN CAMBIOS:"
+      - "La tarea ya está en el estado deseado"
+      - "Estado: {{ 'HABILITADA' if final_task_state.enabled else 'DESHABILITADA' }}"
+  when: not change_required

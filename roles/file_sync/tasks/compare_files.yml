@@ -1,0 +1,92 @@
+---
+# tasks/compare_files.yml
+- name: "Identificar archivos faltantes"
+  ansible.builtin.set_fact:
+    missing_files: >-
+      {{ source_files.keys() | difference(target_files.keys()) | list }}
+
+- name: "Identificar archivos desactualizados"
+  ansible.builtin.set_fact:
+    outdated_files: >-
+      {%- set outdated = [] -%}
+      {%- for file in source_files.keys() | intersect(target_files.keys()) -%}
+        {%- if source_files[file].lastwritetime > target_files[file].lastwritetime -%}
+          {%- set _ = outdated.append(file) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ outdated }}
+
+- name: "Identificar archivos idénticos"
+  ansible.builtin.set_fact:
+    identical_files: >-
+      {%- set identical = [] -%}
+      {%- for file in source_files.keys() | intersect(target_files.keys()) -%}
+        {%- if source_files[file].checksum == target_files[file].checksum -%}
+          {%- set _ = identical.append(file) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ identical }}
+
+- name: "Calcular métricas de comparación"
+  ansible.builtin.set_fact:
+    sync_metrics:
+      total_source: "{{ source_files | length }}"
+      total_target: "{{ target_files | length }}"
+      missing_count: "{{ missing_files | length }}"
+      outdated_count: "{{ outdated_files | length }}"
+      identical_count: "{{ identical_files | length }}"
+      files_to_sync: "{{ (missing_files + outdated_files) | unique | length }}"
+      sync_required: "{{ (missing_files + outdated_files) | length > 0 }}"
+      status: "{{ 'WARNING' if (missing_files | length > 0 or outdated_files | length > 0) else 'OK' }}"
+
+- name: "Mostrar reporte visual principal"
+  ansible.builtin.debug:
+    msg:
+      - "╔═══════════════════════════════════════════════════════════════"
+      - "║            REPORTE DE COMPARACIÓN DE ARCHIVOS                 "
+      - "╠═══════════════════════════════════════════════════════════════"
+      - "║ Task: {{ file_sync_description }}"
+      - "║ ID: {{ file_sync_task_id }}"
+      - "║ Fecha: {{ ansible_date_time.date }} {{ ansible_date_time.time }}"
+      - "╠═══════════════════════════════════════════════════════════════"
+      - "║ RESUMEN DE RESULTADOS:"
+      - "║ Total archivos en producción:    {{ sync_metrics.total_source }}"
+      - "║"
+      - "║ Total archivos en contingencia:  {{ sync_metrics.total_target }}"
+      - "║ Archivos faltantes:              {{ sync_metrics.missing_count }}"
+      - "║ Archivos desactualizados:        {{ sync_metrics.outdated_count }}"
+      - "║ Archivos idénticos:              {{ sync_metrics.identical_count }}"
+      - "╠═══════════════════════════════════════════════════════════════"
+      - "║ ESTADO: {{ sync_metrics.status }}"
+      - "╚═══════════════════════════════════════════════════════════════"
+
+- name: "Mostrar archivos faltantes en contingencia"
+  ansible.builtin.debug:
+    msg:
+      - "═════════════════════════════════════════"
+      - "ARCHIVOS FALTANTES EN CONTINGENCIA:"
+      - "═════════════════════════════════════════"
+      - "{% for file in missing_files %}{{ file }} ({{ source_files[file].size }} bytes){% if not loop.last %}{% endif %}{% endfor %}"
+      - "═════════════════════════════════════════"
+  when: missing_files | length > 0
+
+- name: "Mostrar archivos desactualizados"
+  ansible.builtin.debug:
+    msg:
+      - "═════════════════════════════════════════"
+      - "ARCHIVOS DESACTUALIZADOS:"
+      - "═════════════════════════════════════════"
+      - "{% for file in outdated_files %}{{ file }} - Más reciente en producción{% if not loop.last %}{% endif %}{% endfor %}"
+      - "═════════════════════════════════════════"
+  when: outdated_files | length > 0
+
+- name: "Mostrar estado cuando todo está sincronizado"
+  ansible.builtin.debug:
+    msg:
+      - "═════════════════════════════════════════"
+      - "SINCRONIZACIÓN COMPLETA"
+      - "═════════════════════════════════════════"
+      - "Todos los archivos están actualizados"
+      - "No se requiere sincronización"
+      - "═════════════════════════════════════════"
+  when: not sync_metrics.sync_required

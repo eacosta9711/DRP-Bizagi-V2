@@ -1,0 +1,30 @@
+---
+- name: Playbook de Prueba Completa para Windows
+  hosts: windows_servers
+  gather_facts: false
+
+  tasks:
+    - name: 1. Verificar la conexion basica con el host
+      ansible.windows.win_ping:
+
+    - name: 2. Confirmar con que usuario nos conectamos
+      ansible.windows.win_whoami:
+      register: whoami_result
+
+    - name: 3. Mostrar el usuario de la conexion
+      ansible.builtin.debug:
+        msg: "La conexion se realizo con el usuario: {{ whoami_result.account.account_name }}"
+
+    - name: 4. Crear una carpeta de prueba (demuestra permisos de escritura)
+      ansible.windows.win_file:
+        path: C:\ansible_prueba_ok
+        state: directory
+    
+    - name: 5. Verificar el estado del servicio WinRM (demuestra permisos de lectura)
+      ansible.windows.win_service:
+        name: WinRM
+      register: service_status
+
+    - name: 6. Mostrar el estado del servicio
+      ansible.builtin.debug:
+        msg: "El estado del servicio WinRM es: {{ service_status.state }}"

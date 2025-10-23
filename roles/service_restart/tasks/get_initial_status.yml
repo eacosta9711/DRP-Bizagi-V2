@@ -1,0 +1,43 @@
+---
+# tasks/get_initial_status.yml
+
+- name: "Obtener estado inicial de servicios existentes"
+  ansible.windows.win_service:
+    name: "{{ item }}"
+  register: initial_service_status
+  loop: "{{ existing_services }}"
+
+- name: "Procesar estados iniciales"
+  ansible.builtin.set_fact:
+    services_initial_state: >-
+      {%- set states = {} -%}
+      {%- for result in initial_service_status.results -%}
+        {%- set _ = states.update({
+          result.name: {
+            'state': result.state,
+            'start_mode': result.start_mode,
+            'status': result.state | default('unknown'),
+            'display_name': result.display_name | default(result.name)
+          }
+        }) -%}
+      {%- endfor -%}
+      {{ states }}
+
+- name: "Mostrar estado inicial detallado"
+  ansible.builtin.debug:
+    msg:
+      - "════════════════════════════════════════════"
+      - "ESTADO INICIAL DE SERVICIOS"
+      - "════════════════════════════════════════════"
+      - "Fecha: {{ ansible_date_time.date }} {{ ansible_date_time.time }}"
+      - "────────────────────────────────────────────"
+      - "{% for service, details in services_initial_state.items() %}{{ service }}: {{ details.state | upper }} ({{ details.start_mode }}){% endfor %}"
+      - "════════════════════════════════════════════"
+
+- name: "Contar servicios por estado inicial"
+  ansible.builtin.set_fact:
+    initial_stats:
+      total: "{{ existing_services | length }}"
+      running: "{{ services_initial_state.values() | selectattr('state', 'equalto', 'started') | list | length }}"
+      stopped: "{{ services_initial_state.values() | selectattr('state', 'equalto', 'stopped') | list | length }}"
+      other: "{{ services_initial_state.values() | rejectattr('state', 'in', ['started', 'stopped']) | list | length }}"

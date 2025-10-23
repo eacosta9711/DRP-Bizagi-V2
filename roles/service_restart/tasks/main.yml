@@ -1,0 +1,53 @@
+---
+# tasks file for roles/service_restart
+- name: "(FAIL) - Validar parámetros requeridos"
+  ansible.builtin.fail:
+    msg: "Parámetro requerido faltante: {{ item }}"
+  when: vars[item] is not defined or vars[item] | length == 0
+  loop:
+    - service_restart_target_server
+    - service_restart_service_names
+
+- name: "Validar que la acción solicitada sea válida"
+  ansible.builtin.assert:
+    that:
+      - service_restart_action in ['start', 'stop', 'restart']
+    fail_msg: "La acción '{{ service_restart_action }}' no es válida. Use 'start', 'stop' o 'restart'."
+    success_msg: "OK: La acción '{{ service_restart_action }}' es válida."
+
+- name: "Mapear acción a estado requerido por Ansible"
+  ansible.builtin.set_fact:
+    ansible_action_state: "{{ {'start': 'started', 'stop': 'stopped', 'restart': 'restarted'}[service_restart_action] }}"
+
+- name: "Mostrar configuración de la acción" 
+  ansible.builtin.debug:
+    msg:
+      - "════════════════════════════════════════════"
+      - "CONFIGURACIÓN DE ACCIÓN EN SERVICIOS" 
+      - "════════════════════════════════════════════"
+      - "Task ID: {{ service_restart_task_id }}"
+      - "Descripción: {{ service_restart_description }}"
+      - "────────────────────────────────────────────"
+      - "Servidor: {{ service_restart_target_server }}"
+      - "Servicios: {{ service_restart_service_names | join(', ') }}"
+      - "Acción: {{ service_restart_action | upper }}"
+      - "Dependencias: {{ 'HABILITADAS' if service_restart_force_dependent_services else 'DESHABILITADAS' }}"
+      - "────────────────────────────────────────────"
+      - "Total servicios: {{ service_restart_service_names | length }}"
+      - "════════════════════════════════════════════"
+
+- name: "Validar prerequisitos"
+  ansible.builtin.include_tasks: validate_prerequisites.yml
+  tags: [validation, always]
+
+- name: "Obtener estado inicial de servicios"
+  ansible.builtin.include_tasks: get_initial_status.yml
+  tags: [status, always]
+
+- name: "Ejecutar accion en servicios"
+  ansible.builtin.include_tasks: restart_services.yml
+  tags: [restart, always]
+
+- name: "Generar estadísticas"
+  ansible.builtin.include_tasks: generate_stats.yml
+  tags: [stats, always]

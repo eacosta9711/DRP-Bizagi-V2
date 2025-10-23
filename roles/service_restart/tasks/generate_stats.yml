@@ -1,0 +1,73 @@
+---
+# tasks/generate_stats.yml
+
+- name: "Calcular métricas finales"
+  ansible.builtin.set_fact:
+    final_metrics:
+      total_requested: "{{ service_restart_service_names | length }}"
+      total_existing: "{{ existing_services | length }}"
+      total_missing: "{{ missing_services | length }}"
+      total_successful: "{{ restart_results.values() | selectattr('restart_success', 'equalto', true) | list | length }}"
+      total_failed: "{{ restart_results.values() | selectattr('restart_success', 'equalto', false) | list | length }}"
+      total_running: "{{ restart_results.values() | selectattr('is_running', 'equalto', true) | list | length }}"
+      success_rate:
+        "{{ ((restart_results.values() | selectattr('restart_success', 'equalto', true)
+        | list | length) / (restart_results | length) * 100) | round(2) if restart_results | length > 0 else 0 }}"
+
+- name: "Crear estadísticas finales"
+  ansible.builtin.set_fact:
+    final_stats:
+      task_id: "{{ service_restart_task_id }}"
+      description: "{{ service_restart_description }}"
+      target_server: "{{ service_restart_target_server }}"
+      services_requested: "{{ service_restart_service_names }}"
+      services_processed: "{{ existing_services }}"
+      services_missing: "{{ missing_services }}"
+      metrics: "{{ final_metrics }}"
+      results: "{{ restart_results }}"
+      timestamp: "{{ ansible_date_time.iso8601 }}"
+
+- name: "Crear nombre de variable válido para AWX"
+  ansible.builtin.set_fact:
+    task_key_clean: "task_{{ service_restart_task_id | regex_replace('[^a-zA-Z0-9_]', '_') }}"
+
+- name: "Registrar estadísticas en AWX"
+  ansible.builtin.set_stats:
+    data:
+      "{{ task_key_clean }}":
+        task_info: "{{ final_stats }}"
+        host: "{{ inventory_hostname }}"
+        status: "{{ 'success' if (final_metrics.total_failed | int) == 0 else 'partial_success' if (final_metrics.total_successful | int) > 0 else 'failed' }}"
+      service_restart_summary:
+        task_id: "{{ service_restart_task_id }}"
+        target_server: "{{ service_restart_target_server }}"
+        total_requested: "{{ final_metrics.total_requested | int }}"
+        total_processed: "{{ final_metrics.total_existing | int }}"
+        total_successful: "{{ final_metrics.total_successful | int }}"
+        total_failed: "{{ final_metrics.total_failed | int }}"
+        total_running: "{{ final_metrics.total_running | int }}"
+        success_rate: "{{ final_metrics.success_rate | float }}"
+        services_missing: "{{ missing_services }}"
+        timestamp: "{{ ansible_date_time.iso8601 }}"
+    per_host: false
+
+- name: "Mostrar estadísticas generadas"
+  ansible.builtin.debug:
+    msg:
+      - "════════════════════════════════════════════"
+      - "ESTADÍSTICAS REGISTRADAS EN AWX"
+      - "════════════════════════════════════════════"
+      - "Variable: {{ task_key_clean }}"
+      - "Task ID: {{ final_stats.task_id }}"
+      - "Servidor: {{ final_stats.target_server }}"
+      - "────────────────────────────────────────────"
+      - "Servicios solicitados: {{ final_metrics.total_requested }}"
+      - "Servicios procesados: {{ final_metrics.total_existing }}"
+      - "Servicios exitosos: {{ final_metrics.total_successful }}"
+      - "Servicios fallidos: {{ final_metrics.total_failed }}"
+      - "Servicios corriendo: {{ final_metrics.total_running }}"
+      - "Tasa de éxito: {{ final_metrics.success_rate }}%"
+      - "────────────────────────────────────────────"
+      - "Status: {{ 'SUCCESS' if (final_metrics.total_failed | int) == 0 else 'PARTIAL_SUCCESS'
+        if (final_metrics.total_successful | int) > 0 else 'FAILED' }}"
+      - "════════════════════════════════════════════"

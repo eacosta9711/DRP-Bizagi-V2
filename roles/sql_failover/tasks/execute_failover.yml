@@ -1,0 +1,84 @@
+# roles/sql_failover/tasks/execute_failover.yml (VERSIÓN FINAL)
+---
+- name: "INICIO - Ejecución del Failover para la BD [{{ db_name }}]"
+  ansible.builtin.debug:
+    msg: "Iniciando proceso de failover en el servidor principal {{ inventory_hostname }}..."
+
+- name: "Paso 1/5: Verificar estado de la BD en servidor primario (debe ser ONLINE)"
+  ansible.windows.win_powershell:
+    script: "Invoke-Sqlcmd -ServerInstance '{{ inventory_hostname }}' -Query \"SELECT state_desc FROM sys.databases WHERE name = '{{ db_name }}';\""
+  register: primary_db_status
+  changed_when: false
+
+- name: "Validar que la BD en primario esté ONLINE"
+  ansible.builtin.assert:
+    that:
+      - primary_db_status.output | length > 0
+      - "'ONLINE' in (primary_db_status.output[0].state_desc | string)"
+    fail_msg: "ERROR: No se encontró la base de datos '{{ db_name }}' o no está en estado 'ONLINE' en el servidor primario."
+    success_msg: "OK: La BD en el primario está ONLINE."
+
+- name: "Paso 2/5: Verificar estado de la BD en servidor secundario (debe ser RESTORING)"
+  ansible.windows.win_powershell:
+    script: "Invoke-Sqlcmd -ServerInstance '{{ secondary_server }}' -Query \"SELECT state_desc FROM sys.databases WHERE name = '{{ db_name }}';\""
+  delegate_to: "{{ primary_server }}"
+  register: secondary_db_status
+  changed_when: false
+
+- name: "Validar que la BD en secundario esté RESTORING"
+  ansible.builtin.assert:
+    that:
+      - secondary_db_status.output | length > 0
+      - "'RESTORING' in (secondary_db_status.output[0].state_desc | string)"
+    fail_msg: "ERROR: No se encontró la base de datos '{{ db_name }}' o no está en estado 'RESTORING' en el servidor secundario."
+    success_msg: "OK: La BD en el secundario está RESTORING (lista para failover)."
+
+- name: "Paso 3/5: Verificar tamaño del log transaccional"
+  ansible.windows.win_powershell:
+    script: "$log_size_mb = (Invoke-Sqlcmd -ServerInstance '{{ inventory_hostname }}' -Query \"SELECT size * 8.0 / 1024.0 FROM sys.master_files WHERE database_id = DB_ID('{{ db_name }}') AND type_desc = 'LOG'\").ItemArray[0]; Write-Output $log_size_mb"
+  register: log_size_check
+  changed_when: false
+
+- name: "Reducir log transaccional si supera el umbral de {{ log_size_threshold_gb }} GB"
+  when: "log_size_check.output[0] | float > (log_size_threshold_gb * 1024)"
+  block:
+    - name: "INFO: El log es > {{ log_size_threshold_gb }} GB. Ejecutando DBCC SHRINKFILE."
+      ansible.builtin.debug:
+        msg: "Tamaño actual del log: {{ log_size_check.output[0] | round(2) }} MB. Reduciendo..."
+    - name: "Ejecutar DBCC SHRINKFILE para el log"
+      ansible.windows.win_powershell:
+        script: |
+          $log_file_name = (Invoke-Sqlcmd -ServerInstance '{{ inventory_hostname }}' -Query "SELECT name FROM sys.master_files WHERE database_id = DB_ID('{{ db_name }}') AND type_desc = 'LOG'").ItemArray[0]
+          $query = "USE [{{ db_name }}]; DBCC SHRINKFILE (N'$log_file_name', 0, TRUNCATEONLY);"
+          Invoke-Sqlcmd -ServerInstance '{{ inventory_hostname }}' -Query $query
+      register: shrink_result
+      changed_when: "'Did not shrink' not in shrink_result.output"
+
+- name: "Paso 4/5: Poner la base de datos en modo sincrónico (SAFETY FULL)"
+  ansible.windows.win_powershell:
+    script: "Invoke-Sqlcmd -ServerInstance '{{ inventory_hostname }}' -Query \"ALTER DATABASE [{{ db_name }}] SET SAFETY FULL;\""
+  changed_when: true
+
+#- name: "(PAUSA) - Esperar a que la sincronización se complete"
+#  ansible.windows.win_pause:
+#    seconds: 15
+#  changed_when: false
+
+- name: "Paso 5/5: Ejecutar el FAILOVER"
+  ansible.windows.win_powershell:
+    script: "Invoke-Sqlcmd -ServerInstance '{{ inventory_hostname }}' -Query \"ALTER DATABASE [{{ db_name }}] SET PARTNER FAILOVER;\""
+  changed_when: true
+
+- name: "FIN - Resumen de la Ejecución del Failover"
+  ansible.builtin.debug:
+    msg:
+      - "==============================================================="
+      - "            RESUMEN DE EJECUCIÓN DEL FAILOVER"
+      - "==============================================================="
+      - " [✓] Estados de BD (Primario/Secundario): Verificados"
+      - " [✓] Log Transaccional: Verificado y/o reducido"
+      - " [✓] Modo Sincrónico (SAFETY FULL): Activado"
+      - " [✓] Comando FAILOVER: Ejecutado exitosamente"
+      - "---------------------------------------------------------------"
+      - " El servidor '{{ secondary_server }}' es ahora el nuevo principal."
+      - "==============================================================="

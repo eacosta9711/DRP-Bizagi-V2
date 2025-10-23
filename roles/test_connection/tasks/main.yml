@@ -1,0 +1,23 @@
+---
+# tasks file for roles/test_connection
+- name: "Mostrar configuración de la prueba de Conexion"
+  ansible.builtin.debug:
+    msg:
+      - "===================================="
+      - "TAREA {{ test_connection_task_id }}: {{ test_connection_task_description }}"
+      - "===================================="
+      - "Desde: {{ inventory_hostname }}"
+      - "Tipo: {{ test_connection_check_types }}"
+      - "Destinos: {{ test_connection_target_hosts | join(', ') }}"
+      - "Puertos: {{ (test_connection_check_types in ['telnet', 'ambos']) | ternary(test_connection_ports | join(', '), 'N/A') }}"
+      - "===================================="
+
+- name: Ejecutar Test Windows
+  ansible.builtin.include_tasks:
+    file: windows.yml
+  when: ansible_os_family == 'Windows'
+
+- name: Ejecutar Test Linux
+  ansible.builtin.include_tasks:
+    file: linux.yml
+  when: ansible_os_family in ['RedHat', 'Debian']

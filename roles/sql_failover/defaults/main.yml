@@ -1,0 +1,22 @@
+---
+# Variables por defecto para el rol sql_failover.
+
+# -- Configuración de la Conexión SQL --
+# Modo de autenticación: 'windows' o 'sql'
+sql_auth_mode: "windows"
+# Usuario para autenticación SQL (ignorado si el modo es 'windows')
+sql_user: ""
+# Contraseña para autenticación SQL (ignorado si el modo es 'windows').
+sql_password: ""
+# Usar cifrado en la conexión SQL. 'true' u 'false'
+sql_encrypt: true
+
+# -- Puertos de Red --
+# Puerto de la instancia de SQL Server
+sql_port: 1433
+# Puerto utilizado para el endpoint de Mirroring
+mirroring_port: 5022
+
+# -- Umbrales y Comportamiento --
+# Tamaño máximo del log transaccional en GB antes de intentar reducirlo.
+log_size_threshold_gb: 2

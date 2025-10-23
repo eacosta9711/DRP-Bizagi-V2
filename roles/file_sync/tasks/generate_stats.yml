@@ -1,0 +1,69 @@
+---
+# tasks/generate_stats.yml
+- name: "Establecer sync_status por defecto si no existe"
+  ansible.builtin.set_fact:
+    sync_status:
+      completed: false
+      success: false
+      message: "Sincronización no ejecutada"
+      timestamp: "{{ ansible_date_time.iso8601 }}"
+      source_server: "{{ file_sync_source_server }}"
+      target_server: "{{ file_sync_target_server }}"
+  when: sync_status is not defined
+
+- name: "Crear estadísticas finales"
+  ansible.builtin.set_fact:
+    final_stats:
+      task_id: "{{ file_sync_task_id }}"
+      description: "{{ file_sync_description }}"
+      source_server: "{{ file_sync_source_server }}"
+      target_server: "{{ file_sync_target_server }}"
+      sync_path: "{{ file_sync_comparison_path }}"
+      metrics: "{{ sync_metrics }}"
+      sync_executed: "{{ file_sync_execute_copy | bool }}"
+      sync_status: "{{ sync_status }}"
+      timestamp: "{{ ansible_date_time.iso8601 }}"
+
+- name: "Crear nombre de variable válido"
+  ansible.builtin.set_fact:
+    task_key_clean: "task_{{ file_sync_task_id | regex_replace('[^a-zA-Z0-9_]', '_') }}"
+
+- name: "Registrar en AWX"
+  ansible.builtin.set_stats:
+    data:
+      "{{ task_key_clean }}":
+        task_info: "{{ final_stats }}"
+        host: "{{ inventory_hostname }}"
+        status:
+          "{{ 'success' if (not sync_metrics.sync_required or (sync_status.completed | default(false)))
+          else 'analysis_only' if not (file_sync_execute_copy | bool) else 'failed' }}"
+      sync_summary:
+        task_id: "{{ file_sync_task_id }}"
+        source_server: "{{ file_sync_source_server }}"
+        target_server: "{{ file_sync_target_server }}"
+        sync_path: "{{ file_sync_comparison_path }}"
+        total_files_source: "{{ sync_metrics.total_source | int }}"
+        total_files_target: "{{ sync_metrics.total_target | int }}"
+        files_missing: "{{ sync_metrics.missing_count | int }}"
+        files_outdated: "{{ sync_metrics.outdated_count | int }}"
+        sync_required: "{{ sync_metrics.sync_required }}"
+        sync_executed: "{{ file_sync_execute_copy | bool }}"
+        sync_successful: "{{ sync_status.success | default(false) }}"
+        timestamp: "{{ ansible_date_time.iso8601 }}"
+    per_host: false
+
+- name: "Mostrar estadísticas generadas"
+  ansible.builtin.debug:
+    msg:
+      - "════════════════════════════════════════════"
+      - "ESTADÍSTICAS REGISTRADAS EN AWX"
+      - "════════════════════════════════════════════"
+      - "Variable: {{ task_key_clean }}"
+      - "Task ID: {{ final_stats.task_id }}"
+      - "Origen: {{ final_stats.source_server }}"
+      - "Destino: {{ final_stats.target_server }}"
+      - "Modo: {{ 'Solo Análisis' if not (file_sync_execute_copy | bool) else 'Análisis + Sincronización' }}"
+      - "Status: {{ 'success' if (not sync_metrics.sync_required or (sync_status.completed | default(false)))
+        else 'analysis_only' if not (file_sync_execute_copy | bool) else 'failed' }}"
+      - "Sincronización requerida: {{ sync_metrics.sync_required }}"
+      - "════════════════════════════════════════════"

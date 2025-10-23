@@ -1,0 +1,102 @@
+---
+# Play 1: Validaciones en localhost
+- name: "Validaciones de Parámetros - Accion en Servicios"
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+    - name: "(INFORMATIVO) - Validar parámetros básicos requeridos"
+      ansible.builtin.assert:
+        that:
+          - target_server is defined
+          - target_server | length > 0
+          - service_names is defined
+          - service_names | length > 0
+        fail_msg: |
+          ERROR: Debes definir servidor y servicios:
+          - target_server: Servidor donde se van a procesar los servicios
+          - service_names: Lista de servicios a procesar
+          - Servidor actual: "{{ target_server | default('NO DEFINIDO') }}"
+          - Servicios actuales: "{{ service_names | default('NO DEFINIDOS') }}"
+        success_msg: "OK: Parámetros definidos correctamente"
+
+    - name: "(INFORMATIVO) - Validar que servidor existe en inventario"
+      ansible.builtin.assert:
+        that:
+          - target_server in groups['all']
+        fail_msg: |
+          ERROR: El servidor no existe en el inventario:
+          - Servidor buscado: "{{ target_server }}"
+          - Servidores disponibles: {{ groups['windows_servers'] | default([]) | join(', ') }}
+        success_msg: "OK: Servidor {{ target_server }} encontrado en inventario"
+
+    - name: "(INFORMATIVO) - Validar que servidor es Windows"
+      ansible.builtin.assert:
+        that:
+          - target_server in groups['windows_servers'] | default([])
+        fail_msg: |
+          ERROR: El servidor debe ser Windows:
+          - Servidor: {{ target_server }}
+          - Servidores Windows válidos: {{ groups['windows_servers'] | default([]) | join(', ') }}
+        success_msg: "OK: Servidor Windows válido"
+
+    - name: "Procesar lista de servicios"
+      ansible.builtin.set_fact:
+        services_processed: >-
+          {%- if service_names is string -%}
+            {%- if service_names.startswith('[') and service_names.endswith(']') -%}
+              {{ service_names | from_json }}
+            {%- else -%}
+              {{ [service_names] }}
+            {%- endif -%}
+          {%- else -%}
+            {{ service_names }}
+          {%- endif -%}
+
+    - name: "Mostrar resumen de validación"
+      ansible.builtin.debug:
+        msg:
+          - "════════════════════════════════════════════"
+          - "VALIDACIONES COMPLETADAS - ACCION EN SERVICIOS"
+          - "════════════════════════════════════════════"
+          - "Servidor: {{ target_server }}"
+          - "Role: {{ hostvars[target_server]['server_role'] | default('N/A') }}"
+          - "IP: {{ hostvars[target_server]['ansible_host'] | default('N/A') }}"
+          - "────────────────────────────────────────────"
+          - "Servicios a procesar: {{ services_processed | length }}"
+          - "Lista: {{ services_processed | join(', ') }}"
+          - "Dependencias: Habilitadas por defecto"
+          - "════════════════════════════════════════════"
+
+# Play 2: Ejecucion de Acciones en Servicios Windows
+- name: "Ejecucion de Acciones en Servicios Windows"
+  hosts: "{{ target_server | default([]) }}"
+  gather_facts: true
+
+  vars:
+    restart_task_id: "{{ custom_task_id | default('service_action') }}"
+    restart_description: "{{ custom_description | default('Ejecucion de acciones en Servicios Windows') }}"
+
+  tasks:
+    - name: "Mostrar contexto del servidor"
+      ansible.builtin.debug:
+        msg:
+          - "════════════════════════════════════════════"
+          - "SERVIDOR DE EJECUCIÓN"
+          - "════════════════════════════════════════════"
+          - "Servidor: {{ inventory_hostname }}"
+          - "Role: {{ server_role | default('N/A') }}"
+          - "App Instance: {{ app_instance | default('N/A') }}"
+          - "IP: {{ ansible_host }}"
+          - "OS: {{ ansible_os_family }}"
+          - "════════════════════════════════════════════"
+
+    - name: "Ejecutar accion en servicios"
+      ansible.builtin.include_role:
+        name: service_restart
+      vars:
+        service_restart_task_id: "{{ restart_task_id }}"
+        service_restart_description: "{{ restart_description }}"
+        service_restart_target_server: "{{ target_server }}"
+        service_restart_service_names: "{{ hostvars['localhost']['services_processed'] }}"
+        service_restart_action: "{{ action | default(omit) }}"

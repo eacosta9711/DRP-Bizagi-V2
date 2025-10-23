@@ -1,0 +1,99 @@
+---
+# Play 1: Validaciones en localhost
+- name: "Validar Parámetros para Cambio de Conexión DB"
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+    - name: "(VALIDACION) - Parámetros requeridos"
+      ansible.builtin.assert:
+        that:
+          - target_server is defined and target_server | length > 0
+          - active_environment is defined and active_environment in ['produccion', 'contingencia']
+        fail_msg: |
+          - ERROR: Debes definir las variables correctamente.
+          - target_server: El servidor Windows donde se hará el cambio. (Actual: "{{ target_server | default('NO DEFINIDO') }}")
+          - active_environment: El entorno a activar ('produccion' o 'contingencia'). (Actual: "{{ active_environment | default('NO DEFINIDO') }}")
+        success_msg: "Parámetros básicos correctos."
+
+    - name: "(VALIDACION) - Servidor existe en el inventario"
+      ansible.builtin.assert:
+        that:
+          - target_server in groups['all']
+        fail_msg: |
+          - ERROR: El servidor '{{ target_server }}' no se encontró en el inventario.
+          - Servidores disponibles: {{ groups['all'] | join(', ') }}
+        success_msg: "El servidor '{{ target_server }}' existe en el inventario."
+
+    - name: "(RESUMEN) - Plan de Ejecución"
+      ansible.builtin.debug:
+        msg:
+          - "========================================================"
+          - "  PLAN DE CAMBIO DE STRING DE CONEXIÓN"
+          - "========================================================"
+          - "  ‣ Servidor Destino: {{ target_server }}"
+          - "  ‣ Entorno a Activar: {{ active_environment | upper }}"
+          - "========================================================"
+
+# Play 2: Ejecución en el servidor de destino
+- name: "Aplicar cambio de String de Conexión en {{ target_server }}"
+  hosts: "{{ target_server }}"
+  gather_facts: true
+
+  vars:
+    #Definimos los valores del Data Source para cada entorno
+    db_data_sources:
+      produccion: "vsql2k16bpm1\\BMP1P,57201"
+      contingencia: "servidor-contingencia\\INSTANCIA,54321"
+
+    #Lista de archivos a modificar.
+    config_files:
+      - template: "web.config.j2"
+        dest: 'C:\Bizagi\Projects\BancaPersona\WebApplication\web.config'
+      - template: "BizAgi.Scheduler.Services.exe.config.j2"
+        dest: 'C:\Bizagi\Projects\BancaPersona\Scheduler\BizAgi.Scheduler.Services.exe.config'
+
+  tasks:
+    - name: "(PREREQUISITO) - Confirmar que es un servidor Windows"
+      ansible.builtin.assert:
+        that:
+          - ansible_os_family == 'Windows'
+        fail_msg: "ERROR: Este playbook solo puede ejecutarse en servidores Windows."
+        success_msg: "Es un servidor Windows ({{ ansible_distribution }})."
+
+    - name: "Generando archivos de configuración desde plantillas"
+      ansible.windows.win_template:
+        src: "templates/{{ item.template }}" # Origen de la plantilla
+        dest: "{{ item.dest }}"             # Destino en el servidor remoto
+      vars:
+        # Variable que se inyectará en la plantilla. Su valor se saca del diccionario.
+        db_data_source: "{{ db_data_sources[active_environment] }}"
+      loop: "{{ config_files }}" # Bucle sobre la lista de archivos
+      register: template_results # Guardamos los resultados de AMBAS operaciones
+
+    - name: "(REPORTE FINAL) - Resultado de la Operación"
+      ansible.builtin.debug:
+        msg: |
+          ========================================================
+            REPORTE FINAL - OPERACIÓN COMPLETADA
+          ========================================================
+            ‣ Servidor: {{ inventory_hostname }}
+            ‣ Entorno activo: {{ active_environment | upper }}
+          --------------------------------------------------------
+            RESULTADOS DETALLADOS:
+          {% for result in template_results.results %}
+            - Archivo: {{ result.dest | win_basename }}
+              Ruta: {{ result.dest }}
+              Estado: {{ 'CAMBIADO' if result.changed else 'SIN CAMBIOS (ya estaba configurado)' }}
+          {% endfor %}
+          ========================================================
+
+    - name: "(REPORTE FINAL) - Resultado de la Operación"
+      ansible.builtin.set_stats:
+        data:
+          config_change_summary:
+            host: "{{ inventory_hostname }}"
+            environment_activated: "{{ active_environment }}"
+            files_checked: "{{ config_files | map(attribute='dest') | list }}"
+            files_changed: "{{ template_results.results | selectattr('changed', 'equalto', true) | map(attribute='dest') | list }}"
+            change_count: "{{ template_results.results | selectattr('changed', 'equalto', true) | list | length }}"

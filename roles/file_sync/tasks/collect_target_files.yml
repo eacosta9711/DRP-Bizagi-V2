@@ -1,0 +1,33 @@
+---
+# tasks/collect_target_files.yml
+- name: "Buscar archivos en destino"
+  ansible.windows.win_find:
+    paths: "{{ file_sync_comparison_path }}"
+    patterns: "{{ file_sync_file_patterns }}"
+    recurse: false
+  delegate_to: "{{ file_sync_target_server }}"
+  register: target_files_raw
+
+- name: "Procesar archivos destino"
+  ansible.builtin.set_fact:
+    target_files: >-
+      {%- set files = {} -%}
+      {%- for file in target_files_raw.files -%}
+        {%- set _ = files.update({
+          file.path | win_basename: {
+            'path': file.path,
+            'size': file.size,
+            'checksum': file.checksum | default('N/A'),
+            'lastwritetime': file.lastwritetime,
+            'server': file_sync_target_server
+          }
+        }) -%}
+      {%- endfor -%}
+      {{ files }}
+
+- name: "Mostrar archivos encontrados en destino"
+  ansible.builtin.debug:
+    msg:
+      - "Archivos en {{ file_sync_target_server }}: {{ target_files | length }}"
+      - "{% for filename in target_files.keys() %}{{ filename }}{% if not loop.last %}, {% endif %}{% endfor %}"
+  when: target_files | length > 0

@@ -1,0 +1,102 @@
+{
+  "text": "{{ notification_title | default('Notificación de Ansible') }}",
+  "cards": [
+    {
+      "header": {
+        "title": "{{ card_title | default('Ansible Deployment') }}",
+        "subtitle": "{{ card_subtitle | default(playbook_name) }}",
+      },
+      "sections": [
+        {
+          "widgets": [
+            {
+              "keyValue": {
+                "topLabel": "Estado",
+                "content": "{{ deployment_status | upper }}",
+                "contentMultiline": false,
+                "icon": "{{ status_icon }}"
+              }
+            },
+            {
+              "keyValue": {
+                "topLabel": "Fecha y Hora",
+                "content": "{{ execution_date }} - {{ execution_time }}",
+                "contentMultiline": false,
+                "icon": "CLOCK"
+              }
+            },
+            {
+              "keyValue": {
+                "topLabel": "Playbook",
+                "content": "{{ playbook_name }}",
+                "contentMultiline": false,
+                "icon": "DESCRIPTION"
+              }
+            },
+            {
+              "keyValue": {
+                "topLabel": "Host",
+                "content": "{{ target_host }}",
+                "contentMultiline": false,
+                "icon": "PERSON"
+              }
+            }{% if execution_user is defined %},
+            {
+              "keyValue": {
+                "topLabel": "Ejecutado por",
+                "content": "{{ execution_user }}",
+                "contentMultiline": false,
+                "icon": "EMAIL"
+              }
+            }{% endif %}{% if duration is defined %},
+            {
+              "keyValue": {
+                "topLabel": "Duración",
+                "content": "{{ duration }}",
+                "contentMultiline": false,
+                "icon": "STAR"
+              }
+            }{% endif %}
+          ]
+        },
+        {
+          "widgets": [
+            {
+              "textParagraph": {
+                "text": "<b>Resumen:</b> Prueba Ansible <i>{{ playbook_name }}</i> se completó el {{ execution_timestamp }}."
+              }
+            }
+          ]
+        }{% if show_buttons | default(false) %},
+        {
+          "widgets": [
+            {
+              "buttons": [
+                {
+                  "textButton": {
+                    "text": "Ver Logs",
+                    "onClick": {
+                      "openLink": {
+                        "url": "{{ logs_url | default('#') }}"
+                      }
+                    }
+                  }
+                }{% if dashboard_url is defined %},
+                {
+                  "textButton": {
+                    "text": "Dashboard",
+                    "onClick": {
+                      "openLink": {
+                        "url": "{{ dashboard_url }}"
+                      }
+                    }
+                  }
+                }{% endif %}
+              ]
+            }
+          ]
+        }{% endif %}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+---
+# tasks file/windows.yml for roles/test_connection
+- name: "Ejecutar test de conectividad desde Pivote Windows"
+  block:
+    - name: "Test conectividad [{{ test_connection_check_types | capitalize }}]"
+      ansible.windows.win_shell: "{{ lookup('template', 'test_connection_windows.ps1.j2') }}"
+      register: connectivity_test
+      retries: "{{ test_connection_retries }}"
+      delay: "{{ test_connection_retry_delay }}"
+      until: connectivity_test is defined
+      changed_when: false
+  rescue:
+    - name: "Manejar error (WinRM, PowerShell, etc.)"
+      ansible.builtin.set_fact:
+        connectivity_test:
+          stdout_lines:
+            [
+              "SYSTEM_ERROR: {{ ansible_failed_result.msg | default('Error técnico') }}",
+            ]
+          stdout: "SYSTEM_ERROR"
+
+    - name: "Mostrar error capturado"
+      ansible.builtin.debug:
+        msg: |
+          ERROR TÉCNICO CAPTURADO:
+          {{ ansible_failed_result.msg | default('Error desconocido') }}
+          El test no pudo ejecutarse por problemas.
+
+# Procesar datos del Test
+- name: "Crear resultado"
+  ansible.builtin.set_fact:
+    connectivity_result:
+      start_time: "{{ ansible_date_time.date }} - {{ ansible_date_time.time }}"
+      task_id: "{{ test_connection_task_id }}"
+      source_host: "{{ inventory_hostname }}"
+      results: "{{ connectivity_test.stdout_lines }}"
+      status: "{{ 'success' if 'FAILED' not in connectivity_test.stdout else 'failed' }}"
+
+# Formatear para stats
+- name: "Crear resultado del host actual"
+  ansible.builtin.set_fact:
+    host_result:
+      status: "{{ connectivity_result.status }}"
+      timestamp: "{{ ansible_date_time.iso8601 }}"
+      details: "{{ connectivity_result.results }}"
+
+# Metadata de la task
+- name: "Preparar datos de la task"
+  ansible.builtin.set_fact:
+    task_key: "task_{{ test_connection_task_id }}"
+    task_info:
+      task_id: "{{ test_connection_task_id }}"
+      description: "{{ test_connection_task_description }}"
+      target: "{{ test_connection_target_hosts | join(',') }}:{{ test_connection_ports | join(',') }}"
+      execution_time: "{{ ansible_date_time.iso8601 }}"
+
+# Registrar en AWX (set_stats)
+- name: "Registrar estadísticas"
+  ansible.builtin.set_stats:
+    data:
+      "{{ task_key }}": "{{ current_task_data | combine({'hosts': updated_hosts}) }}"
+    per_host: false
+  vars:
+    current_task_data: "{{ vars[task_key] | default({'task_info': task_info, 'hosts': {}}) }}"
+    updated_hosts: "{{ current_task_data.hosts | default({}) | combine({inventory_hostname: host_result}) }}"

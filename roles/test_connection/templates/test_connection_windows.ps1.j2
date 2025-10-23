@@ -1,0 +1,64 @@
+# Template PowerShell para conectividad desde Windows
+$results = @()
+$ErrorActionPreference = "Stop"
+
+{% if test_connection_check_type in ['telnet', 'ambos'] %}
+# ===================
+# TESTS TELNET
+# ===================
+{% for host in test_connection_target_hosts %}
+{% for port in test_connection_ports %}
+try {
+    Write-Verbose "Test telnet a {{ host }}:{{ port }}"
+    $test = Test-NetConnection -ComputerName "{{ host }}" -Port {{ port }} -InformationLevel Detailed -WarningAction SilentlyContinue
+    
+    if ($test.TcpTestSucceeded) {
+        $results += "TELNET {{ host }}:{{ port }} = SUCCESS"
+    } else {
+        $results += "TELNET {{ host }}:{{ port }} = FAILED"
+    }
+    
+    Start-Sleep -Milliseconds 100
+} catch {
+    $errorMsg = $_.Exception.Message -replace '"', "'"
+    $results += "TELNET {{ host }}:{{ port }} = ERROR: $errorMsg"
+}
+{% endfor %}
+{% endfor %}
+{% endif %}
+
+{% if test_connection_check_type in ['ping', 'ambos'] %}
+# ===================
+# TESTS PING
+# ===================
+{% for host in test_connection_target_hosts %}
+try {
+    Write-Verbose "Test ping a {{ host }}"
+    $ping = Test-Connection -ComputerName "{{ host }}" -Count 5 -Quiet -ErrorAction Stop
+    
+    if ($ping) {
+        $results += "PING {{ host }} = SUCCESS"
+    } else {
+        $results += "PING {{ host }} = FAILED"
+    }
+    
+    Start-Sleep -Milliseconds 100
+} catch {
+    $errorMsg = $_.Exception.Message -replace '"', "'"
+    $results += "PING {{ host }} = ERROR: $errorMsg"
+}
+{% endfor %}
+{% endif %}
+
+# Mostrar todos los resultados
+$results | ForEach-Object { Write-Host $_ }
+
+# Calcular resumen
+$successCount = ($results | Where-Object { $_ -like "*SUCCESS*" }).Count
+$telnetTests = {{ test_connection_target_hosts | length * test_connection_ports | length if test_connection_check_type in ['telnet', 'ambos'] else 0 }}
+$pingTests = {{ test_connection_target_hosts | length if test_connection_check_type in ['ping', 'ambos'] else 0 }}
+$totalTests = $telnetTests + $pingTests
+$successRate = if ($totalTests -gt 0) { [math]::Round(($successCount / $totalTests) * 100, 2) } else { 0 }
+
+Write-Host ""
+Write-Host "RESUMEN: $successCount/$totalTests exitosos ($successRate%)"

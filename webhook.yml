@@ -1,0 +1,26 @@
+---
+- name: Enviar notificación con tarjeta.
+  hosts: localhost
+  vars_files:
+    - roles/cards/vars/main.yml
+
+  tasks:
+    - name: Determinar estado del despliegue
+      ansible.builtin.set_fact:
+        deployment_status: "{{ 'success' if ansible_failed_result is not defined else 'failed' }}"
+        status_icon: "{{ cards_google_chat.icons.success if ansible_failed_result is not defined else cards_google_chat.icons.failed }}"
+        playbook_name: "{{ playbook_dir | basename }}"
+        target_host: "{{ ansible_hostname | default('localhost') }}"
+        execution_date: "{{ ansible_date_time.date }}"
+        execution_time: "{{ ansible_date_time.time }}"
+        execution_timestamp: "{{ ansible_date_time.iso8601 }}"
+        execution_user: "Ansible Davivienda"
+
+    - name: Calcular duración de ejecución
+      ansible.builtin.set_fact:
+        duration: "{{ ((ansible_date_time.epoch | int) - (start_time | default(ansible_date_time.epoch) | int)) | int }}s"
+      when: start_time is defined
+
+    - name: Ejecutar role cards
+      ansible.builtin.include_role:
+        name: cards

@@ -1,0 +1,37 @@
+---
+# tasks/validate_task.yml
+- name: "Obtener información de la tarea programada"
+  community.windows.win_scheduled_task_stat:
+    name: "{{ task_scheduler_task_name }}"
+  register: task_info
+  failed_when: false
+
+- name: "Validar que la tarea programada existe"
+  ansible.builtin.assert:
+    that:
+      - task_info.task_exists
+    fail_msg: "Tarea programada '{{ task_scheduler_task_name }}' no existe"
+    success_msg: "OK: Tarea programada encontrada"
+
+- name: "Registrar estado actual de la tarea"
+  ansible.builtin.set_fact:
+    current_task_state:
+      exists: "{{ task_info.task_exists }}"
+      enabled: "{{ task_info.settings.enabled | default(false) }}"
+      state: "{{ task_info.state.status | default('Unknown') }}"
+      last_run: "{{ task_info.state.last_run_time | default('Never') }}"
+      next_run: "{{ task_info.state.next_run_time | default('Unknown') }}"
+
+- name: "Mostrar estado actual"
+  ansible.builtin.debug:
+    msg:
+      - "────────────────────────────────────────────"
+      - "ESTADO ACTUAL EN {{ inventory_hostname }}"
+      - "────────────────────────────────────────────"
+      - "Tarea: {{ task_scheduler_task_name }}"
+      - "Habilitada: {{ current_task_state.enabled }}"
+      - "Estado: {{ current_task_state.state }}"
+      - "Última ejecución: {{ current_task_state.last_run }}"
+      - "Próxima ejecución: {{ current_task_state.next_run }}"
+      - "────────────────────────────────────────────"
+  when: task_scheduler_show_details

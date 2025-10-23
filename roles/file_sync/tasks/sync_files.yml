@@ -1,0 +1,130 @@
+---
+# tasks/sync_files.yml
+- name: "Verificar si hay archivos para sincronizar"
+  ansible.builtin.debug:
+    msg:
+      - "═════════════════════════════════════════"
+      - "INFORMACIÓN"
+      - "═════════════════════════════════════════"
+      - "No hay archivos para sincronizar"
+      - "Todos los archivos están actualizados"
+      - "{{ file_sync_source_server }} ↔ {{ file_sync_target_server }}"
+      - "═════════════════════════════════════════"
+  when: not sync_metrics.sync_required
+
+- name: "Mostrar archivos que se van a sincronizar"
+  ansible.builtin.debug:
+    msg:
+      - "═════════════════════════════════════════"
+      - "INICIANDO SINCRONIZACIÓN"
+      - "═════════════════════════════════════════"
+      - "Origen: {{ file_sync_source_server }}"
+      - "Destino: {{ file_sync_target_server }}"
+      - "Archivos faltantes: {{ sync_metrics.missing_count }}"
+      - "Archivos desactualizados: {{ sync_metrics.outdated_count }}"
+      - "Total a sincronizar: {{ sync_metrics.files_to_sync }}"
+      - "═════════════════════════════════════════"
+  when: sync_metrics.sync_required
+
+- name: "Ejecutar sincronización"
+  when: sync_metrics.sync_required
+  block:
+    - name: "Obtener IP del servidor destino"
+      ansible.builtin.set_fact:
+        target_server_ip: "{{ hostvars[file_sync_target_server].ansible_host }}"
+
+    - name: "Crear flags dinámicos con patrones"
+      ansible.builtin.set_fact:
+        robocopy_flags_with_patterns: "{{ file_sync_robocopy_flags }} {{ file_sync_file_patterns | join(' ') }}"
+
+    - name: "Sincronizar solo archivos con patrones específicos"
+      community.windows.win_robocopy:
+        src: "{{ file_sync_comparison_path }}"
+        dest: "\\\\{{ target_server_ip }}\\{{ file_sync_comparison_path | regex_replace(':', '$') }}"
+        flags: "{{ robocopy_flags_with_patterns }}"
+      register: sync_result
+
+    - name: "Validar resultado de sincronización"
+      ansible.builtin.set_fact:
+        sync_status:
+          completed: true
+          success: "{{ sync_result.rc == 0 or sync_result.rc == 1 }}"
+          message: "{{ sync_result.msg }}"
+          files_copied: "{{ sync_metrics.files_to_sync }}"
+          timestamp: "{{ ansible_date_time.iso8601 }}"
+          return_code: "{{ sync_result.rc | default(99) }}"
+          source_server: "{{ file_sync_source_server }}"
+          target_server: "{{ file_sync_target_server }}"
+
+    - name: "Mostrar reporte visual de sincronización"
+      ansible.builtin.debug:
+        msg:
+          - "╔═══════════════════════════════════════════════════════════════"
+          - "║           REPORTE DE SINCRONIZACIÓN DE ARCHIVOS               "
+          - "╠═══════════════════════════════════════════════════════════════"
+          - "║ Task: {{ file_sync_description }}"
+          - "║ ID: {{ file_sync_task_id }}"
+          - "║ Fecha: {{ ansible_date_time.date }} {{ ansible_date_time.time }}"
+          - "╠═══════════════════════════════════════════════════════════════"
+          - "║ SINCRONIZACIÓN:"
+          - "║ Origen:  {{ file_sync_source_server }} ({{ ansible_host }})"
+          - "║ Destino: {{ file_sync_target_server }} ({{ target_server_ip }})"
+          - "║ Ruta:    {{ file_sync_comparison_path }}"
+          - "╠═══════════════════════════════════════════════════════════════"
+          - "║ RESUMEN DE RESULTADOS:"
+          - "║ Total archivos en origen:         {{ sync_metrics.total_source }}"
+          - "║ Total archivos en destino:        {{ sync_metrics.total_target }}"
+          - "║ Archivos faltantes copiados:      {{ sync_metrics.missing_count }}"
+          - "║ Archivos desactualizados:         {{ sync_metrics.outdated_count }}"
+          - "║ Total archivos sincronizados:     {{ sync_metrics.files_to_sync }}"
+          - "╠═══════════════════════════════════════════════════════════════"
+          - "║ RESULTADO: {{ 'EXITOSO' if sync_status.success else 'FALLÓ' }}"
+          - "║ Mensaje: {{ sync_status.message }}"
+          - "╚═══════════════════════════════════════════════════════════════"
+
+    - name: "Mostrar detalles de archivos sincronizados"
+      ansible.builtin.debug:
+        msg:
+          - "═════════════════════════════════════════"
+          - "ARCHIVOS SINCRONIZADOS"
+          - "═════════════════════════════════════════"
+          - "{% if missing_files | length > 0 %}ARCHIVOS COPIADOS (faltantes):{% for file in missing_files %}  {{ file }}{% endfor %}{% endif %}"
+          - "{% if outdated_files | length > 0 %}ARCHIVOS ACTUALIZADOS:{% for file in outdated_files %}  {{ file }}{% endfor %}{% endif %}"
+          - "═════════════════════════════════════════"
+      when: sync_status.success
+
+    - name: "Mostrar error de sincronización"
+      ansible.builtin.debug:
+        msg:
+          - "═════════════════════════════════════════"
+          - "ERROR EN SINCRONIZACIÓN"
+          - "═════════════════════════════════════════"
+          - "Origen: {{ file_sync_source_server }}"
+          - "Destino: {{ file_sync_target_server }}"
+          - "Código: {{ sync_status.return_code }}"
+          - "Mensaje: {{ sync_status.message }}"
+          - "═════════════════════════════════════════"
+      when: not sync_status.success
+
+  rescue:
+    - name: "Manejar error de sincronización"
+      ansible.builtin.set_fact:
+        sync_status:
+          completed: false
+          success: false
+          message: "{{ ansible_failed_result.msg | default('Error de sincronización') }}"
+          timestamp: "{{ ansible_date_time.iso8601 }}"
+          source_server: "{{ file_sync_source_server }}"
+          target_server: "{{ file_sync_target_server }}"
+
+    - name: "Mostrar error capturado"
+      ansible.builtin.debug:
+        msg:
+          - "╔═══════════════════════════════════════════════════════════════"
+          - "║              ERROR DE SINCRONIZACIÓN                          "
+          - "╠═══════════════════════════════════════════════════════════════"
+          - "║ Origen: {{ file_sync_source_server }}"
+          - "║ Destino: {{ file_sync_target_server }}"
+          - "║ Error: {{ sync_status.message }}"
+          - "║ La sincronización no pudo completarse"
+          - "╚═══════════════════════════════════════════════════════════════"

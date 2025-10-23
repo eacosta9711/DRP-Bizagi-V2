@@ -1,0 +1,38 @@
+# roles/sql_failover/tasks/post_failover_tasks.yml (VERSIÓN FINAL)
+---
+- name: "INICIO - Tareas Post-Failover en {{ inventory_hostname }}"
+  ansible.builtin.debug:
+    msg: "Ejecutando tareas de configuración en el nuevo servidor principal."
+
+- name: "Esperar a que la base de datos esté ONLINE en el nuevo servidor principal"
+  ansible.windows.win_powershell:
+    script: |
+      $status = (Invoke-Sqlcmd -ServerInstance '{{ inventory_hostname }}' -Query "SELECT state_desc FROM sys.databases WHERE name = '{{ db_name }}';").state_desc
+      if ($status -ne 'ONLINE') {
+          Write-Host "Database is not yet online. Current status: $status"
+          exit 1
+      }
+      Write-Host "Database is now ONLINE."
+      exit 0
+  register: db_online_check
+  until: db_online_check is succeeded
+  retries: 12
+  delay: 5
+  changed_when: false
+
+- name: "Poner la base de datos en modo asincrónico (SAFETY OFF) en el nuevo principal"
+  ansible.windows.win_powershell:
+    script: "Invoke-Sqlcmd -ServerInstance '{{ inventory_hostname }}' -Query \"ALTER DATABASE [{{ db_name }}] SET SAFETY OFF;\""
+  changed_when: true
+
+- name: "FIN - Resumen de Tareas Post-Failover"
+  ansible.builtin.debug:
+    msg:
+      - "==============================================================="
+      - "             CONFIGURACIÓN FINALIZADA"
+      - "==============================================================="
+      - " Servidor: {{ inventory_hostname }} (Nuevo Principal)"
+      - " Base de Datos: {{ db_name }}"
+      - " [✓] Estado de la BD: ONLINE"
+      - " [✓] Modo de funcionamiento: Asincrónico (SAFETY OFF)"
+      - "==============================================================="

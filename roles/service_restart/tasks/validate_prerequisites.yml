@@ -1,0 +1,88 @@
+---
+# tasks/validate_prerequisites.yml
+- name: "Validar que es servidor Windows"
+  ansible.builtin.assert:
+    that:
+      - ansible_os_family == 'Windows'
+    fail_msg: "Este rol solo funciona en servidores Windows"
+    success_msg: "OK: Servidor Windows detectado"
+
+- name: "Verificar conectividad WinRM"
+  ansible.windows.win_ping:
+  register: winrm_connectivity
+
+- name: "Validar existencia de servicios"
+  ansible.windows.win_service:
+    name: "{{ item }}"
+  register: service_check
+  loop: "{{ service_restart_service_names }}"
+  failed_when: false
+
+- name: "Procesar resultados de validación de servicios"
+  ansible.builtin.set_fact:
+    existing_services: >-
+      {%- set services = [] -%}
+      {%- for result in service_check.results -%}
+        {%- if result.exists -%}
+          {%- set _ = services.append(result.name) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ services }}
+    missing_services: >-
+      {%- set services = [] -%}
+      {%- for result in service_check.results -%}
+        {%- if not result.exists -%}
+          {%- set _ = services.append(result.item) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ services }}
+
+- name: "Mostrar servicios encontrados"
+  ansible.builtin.debug:
+    msg:
+      - "════════════════════════════════════════════"
+      - "VALIDACIÓN DE SERVICIOS"
+      - "════════════════════════════════════════════"
+      - "Servicios SI existentes: {{ existing_services | length }}"
+      - "{% for service in existing_services %} {{ service }}{% endfor %}"
+      - "────────────────────────────────────────────"
+      - "Servicios NO encontrados: {{ missing_services | length }}"
+      - "{% for service in missing_services %} {{ service }}{% endfor %}"
+      - "════════════════════════════════════════════"
+
+- name: "Advertir sobre servicios faltantes"
+  ansible.builtin.debug:
+    msg:
+      - "════════════════════════════════════════════"
+      - "ADVERTENCIA - SERVICIOS FALTANTES"
+      - "════════════════════════════════════════════"
+      - "Servicios no encontrados: {{ missing_services | join(', ') }}"
+      - "Solo se procesarán los servicios existentes"
+      - "════════════════════════════════════════════"
+  when: missing_services | length > 0
+
+- name: "Mostrar error de servicios faltantes"
+  ansible.builtin.debug:
+    msg:
+      - "╔═══════════════════════════════════════════════════════════════"
+      - "║                    ❌ ERROR CRÍTICO                           "
+      - "╠═══════════════════════════════════════════════════════════════"
+      - "║ NINGUNO DE LOS SERVICIOS ESPECIFICADOS EXISTE"
+      - "╠═══════════════════════════════════════════════════════════════"
+      - "║ SERVICIOS SOLICITADOS:"
+      - "║{% for service in service_restart_service_names %} {{ service }}{% endfor %}"
+      - "║"
+      - "║ SERVICIOS NO ENCONTRADOS:"
+      - "║{% for service in missing_services %} {{ service }}{% endfor %}"
+      - "╠═══════════════════════════════════════════════════════════════"
+      - "║ SOLUCIONES POSIBLES:"
+      - "║ 1. Verificar ortografía del nombre del servicio"
+      - "║ 2. Ejecutar 'Get-Service' en PowerShell para ver servicios disponibles"
+      - "║ 3. Confirmar que el servicio está instalado en {{ inventory_hostname }}"
+      - "╚═══════════════════════════════════════════════════════════════"
+  when: existing_services | length == 0
+
+- name: "Fallar ejecución si no hay servicios válidos"
+  ansible.builtin.fail:
+    msg: "No se puede continuar: ningún servicio válido para procesar"
+  when: existing_services | length == 0

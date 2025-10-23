@@ -1,0 +1,166 @@
+---
+# Play 1: Validaciones en localhost
+- name: "Validaciones para Test de Conectividad"
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    task_targets: "{{ (task_targets_input | default('') | split('\n')) | select('truthy') | list }}"
+    check_type: "{{ test_connection_check_type | default('') }}"
+
+  tasks:
+    - name: "(INFORMATIVO) - Validar parámetros básicos requeridos"
+      ansible.builtin.assert:
+        that:
+          - source_server is defined
+          - source_server | length > 0
+        fail_msg: |
+          ERROR: Debes definir el servidor origen:
+          - source_server: Servidor desde donde ejecutar pruebas
+          - Opciones disponibles: SADGVBPMAPP1, SADGVBPMAPP2, CCMVBPMAPP
+          - Origen actual: "{{ source_server | default('NO DEFINIDO') }}"
+        success_msg: "OK: Servidor origen definido: {{ source_server }}"
+
+    - name: "(INFORMATIVO) - Validar que servidor origen existe en inventario"
+      ansible.builtin.assert:
+        that:
+          - source_server in groups['all']
+        fail_msg: |
+          ERROR: El servidor origen no existe en el inventario:
+          - Servidor buscado: "{{ source_server }}"
+          - Servidores disponibles: {{ groups['windows_servers'] | default([]) | join(', ') }}
+        success_msg: "OK: Servidor origen encontrado en inventario"
+
+#    - name: "(INFORMATIVO) - Validar que servidor es Windows válido"
+#      ansible.builtin.assert:
+#        that:
+#          - source_server in groups['windows_servers'] | default([])
+#        fail_msg: |
+#          ERROR: El servidor debe ser parte del grupo Windows:
+#          - Servidor: {{ source_server }}
+#          - Servidores Windows válidos: {{ groups['windows_servers'] | default([]) | join(', ') }}
+#        success_msg: "OK: Servidor Windows válido"
+
+    - name: "(INFORMATIVO) - Validar parámetros de conectividad"
+      ansible.builtin.assert:
+        that:
+          - task_targets_input is defined
+          - task_targets_input | length > 0
+          - test_connection_check_type is defined
+          - test_connection_check_type | length > 0
+        fail_msg: "Parámetros requeridos faltantes: task_targets_input y/o test_connection_check_type"
+        success_msg: "OK: Parámetros de conectividad definidos"
+
+    - name: "(INFORMATIVO) - Validar formato de IPs"
+      ansible.builtin.assert:
+        that:
+          - task_targets | length > 0
+          - task_targets | reject('match', '^([0-9]{1,3}\.){3}[0-9]{1,3}$') | list | length == 0
+        fail_msg: "ERROR: Todos los valores deben ser IPs válidas separadas por ENTER (Ej: 192.168.20.50)"
+        success_msg: "OK: IPs con formato válido"
+
+    - name: "(INFORMATIVO) - Validar formato de puerto"
+      ansible.builtin.assert:
+        that:
+          - task_ports_input is string
+          - task_ports_input | regex_search('^[0-9]{1,5}$')
+        fail_msg: "ERROR: El puerto debe ser un número de 1 a 5 dígitos (Ej: 5985)"
+        success_msg: "OK: Puerto válido"
+      when: check_type in ['telnet', 'ambos']
+
+    - name: "Mostrar configuración de la prueba"
+      ansible.builtin.debug:
+        msg:
+          - "════════════════════════════════════════════"
+          - "VALIDACIONES COMPLETADAS"
+          - "════════════════════════════════════════════"
+          - "Servidor origen: {{ source_server }}"
+          - "Rol del servidor: {{ hostvars[source_server].server_role | default('unknown') | upper }}"
+          - "IP: {{ hostvars[source_server].ansible_host | default('unknown') }}"
+          - "────────────────────────────────────────────"
+          - "Tipo de prueba: {{ check_type | upper }}"
+          - "Targets: {{ task_targets | length }} configurados"
+          - "Puerto: {{ task_ports_input | default('N/A') if check_type in ['telnet', 'ambos'] else 'N/A' }}"
+          - "════════════════════════════════════════════"
+
+# Play 2: Ejecución de pruebas en servidor específico
+- name: "Pruebas de Conectividad desde Servidor Específico"
+  hosts: "{{ source_server | default([])}}"
+  gather_facts: false
+
+  vars:
+    task_targets: "{{ (task_targets_input | default('')) | split('\n') | select('truthy') | list }}"
+    task_ports: "{{ (task_ports_input | default('')) | split('\n') | list }}"
+    task_id: "{{ task_id_input | default('conexion') }}"
+    task_description: "Prueba Conectividad desde {{ inventory_hostname }}"
+
+  pre_tasks:
+    - name: "Recuperar Facts"
+      ansible.builtin.setup:
+      ignore_unreachable: true
+      register: fact_result
+      retries: 3
+      delay: 5
+      until: not fact_result.unreachable | default(false)
+
+    - name: "Establecer estado de los Facts"
+      ansible.builtin.set_fact:
+        facts_generated: true
+      when: ansible_os_family is defined
+
+    - name: "Crear resultado si es No alcanzable"
+      when: facts_generated is not defined
+      block:
+        - name: "Registrar error de recolección de Facts"
+          ansible.builtin.set_fact:
+            connectivity_result:
+              start_time: "{{ ansible_date_time.date | default('N/A') }} - {{ ansible_date_time.time | default('N/A') }}"
+              task_id: "{{ task_id }}"
+              source_host: "{{ inventory_hostname }}"
+              results: ["{{ inventory_hostname }} = UNREACHABLE"]
+              status: "unreachable"
+
+  tasks:
+    - name: "Mostrar configuración del servidor origen"
+      ansible.builtin.debug:
+        msg:
+          - "════════════════════════════════════════════"
+          - "EJECUTANDO DESDE: {{ inventory_hostname | upper }}"
+          - "════════════════════════════════════════════"
+          - "Rol: {{ server_role | default('unknown') | upper }}"
+          - "Instancia: {{ app_instance | default('unknown') | upper }}"
+          - "IP: {{ ansible_host }}"
+          - "SO: {{ ansible_os_family | default('unknown') }}"
+          - "════════════════════════════════════════════"
+      when: facts_generated is defined
+
+    - name: "Ejecutar Tarea - {{ task_description }}"
+      ansible.builtin.include_role:
+        name: test_connection
+      vars:
+        test_connection_check_types: "{{ test_connection_check_type }}"
+        test_connection_target_hosts: "{{ task_targets }}"
+        test_connection_ports: "{{ task_ports }}"
+        test_connection_task_id: "{{ task_id }}"
+        test_connection_task_description: "{{ task_description }}"
+        test_connection_show_details: true
+      when: facts_generated is defined
+
+    - name: "Mostrar resultado final"
+      ansible.builtin.debug:
+        msg:
+          - "╔═══════════════════════════════════════════════════════════════"
+          - "║              RESULTADO FINAL DE CONECTIVIDAD                  "
+          - "╠═══════════════════════════════════════════════════════════════"
+          - "║ Tarea: {{ connectivity_result.task_id }}"
+          - "║ Ejecutado desde: {{ connectivity_result.source_host }}"
+          - "║ Fecha: {{ connectivity_result.start_time }}"
+          - "╠═══════════════════════════════════════════════════════════════"
+          - "║ Estado: {{ connectivity_result.status | upper }}"
+          - "║ Resultados: {{ actual_test_count }} pruebas realizadas"
+          - "╚═══════════════════════════════════════════════════════════════"
+      vars:
+        # Filtrar solo las líneas que contienen = SUCCESS/FAILED/ERROR
+        actual_tests: "{{ connectivity_result.results | select('match', '.*(SUCCESS|FAILED|ERROR).*') | list }}"
+        actual_test_count: "{{ actual_tests | length }}"
+      when: connectivity_result is defined

@@ -1,0 +1,19 @@
+---
+# defaults file for roles/service_restart
+
+# Información de la tarea
+service_restart_task_id: "service_restart"
+service_restart_description: "Windows Service Restart"
+service_restart_target_server: ""
+
+# Lista de servicios (debe ser definida en playbook)
+service_restart_service_names: []
+
+# Configuración de reinicio
+service_restart_action: "restarted" # restarted|stopped|started
+service_restart_force_dependent_services: true # Por defecto habilitado
+service_restart_start_mode: "auto" # auto|manual|disabled
+
+# Configuración de validaciones
+service_restart_validate_final_state: true
+service_restart_show_detailed_output: true

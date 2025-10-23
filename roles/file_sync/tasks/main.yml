@@ -1,0 +1,54 @@
+---
+# tasks/main.yml
+- name: "(FAIL) - Validar parámetros requeridos"
+  ansible.builtin.fail:
+    msg: "Parámetro requerido faltante: {{ item }}"
+  when: vars[item] is not defined or vars[item] | length == 0
+  loop:
+    - file_sync_source_server
+    - file_sync_target_server
+    - file_sync_comparison_path
+    - file_sync_file_patterns
+
+- name: "Mostrar configuración de la sincronización"
+  ansible.builtin.debug:
+    msg:
+      - "════════════════════════════════════════════"
+      - "CONFIGURACIÓN DE SINCRONIZACIÓN"
+      - "════════════════════════════════════════════"
+      - "Task ID: {{ file_sync_task_id }}"
+      - "Descripción: {{ file_sync_description }}"
+      - "────────────────────────────────────────────"
+      - "Origen:  {{ file_sync_source_server }}"
+      - "Destino: {{ file_sync_target_server }}"
+      - "Ruta:    {{ file_sync_comparison_path }}"
+      - "Patrones: {{ file_sync_file_patterns | join(', ') }}"
+      - "Tipo patrones: {{ file_sync_file_patterns | type_debug }}"
+      - "────────────────────────────────────────────"
+      - "Modo: {{ 'Solo Análisis' if not (file_sync_execute_copy | bool) else 'Análisis + Sincronización' }}"
+      - "════════════════════════════════════════════"
+
+- name: "Validar prerequisitos"
+  ansible.builtin.include_tasks: validate_prerequisites.yml
+  tags: [validation, always]
+
+- name: "Recolectar archivos origen"
+  ansible.builtin.include_tasks: collect_source_files.yml
+  tags: [collection, always]
+
+- name: "Recolectar archivos destino"
+  ansible.builtin.include_tasks: collect_target_files.yml
+  tags: [collection, always]
+
+- name: "Comparar archivos"
+  ansible.builtin.include_tasks: compare_files.yml
+  tags: [comparison, always]
+
+- name: "Sincronizar archivos"
+  ansible.builtin.include_tasks: sync_files.yml
+  when: file_sync_execute_copy | bool
+  tags: [sync]
+
+- name: "Generar estadísticas"
+  ansible.builtin.include_tasks: generate_stats.yml
+  tags: [stats, always]

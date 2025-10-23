@@ -1,0 +1,32 @@
+---
+# tasks/collect_source_files.yml
+- name: "Buscar archivos en origen"
+  ansible.windows.win_find:
+    paths: "{{ file_sync_comparison_path }}"
+    patterns: "{{ file_sync_file_patterns }}"
+    recurse: false
+  register: source_files_raw
+
+- name: "Procesar archivos origen"
+  ansible.builtin.set_fact:
+    source_files: >-
+      {%- set files = {} -%}
+      {%- for file in source_files_raw.files -%}
+        {%- set _ = files.update({
+          file.path | win_basename: {
+            'path': file.path,
+            'size': file.size,
+            'checksum': file.checksum | default('N/A'),
+            'lastwritetime': file.lastwritetime,
+            'server': file_sync_source_server
+          }
+        }) -%}
+      {%- endfor -%}
+      {{ files }}
+
+- name: "Mostrar archivos encontrados en origen"
+  ansible.builtin.debug:
+    msg:
+      - "Archivos en {{ file_sync_source_server }}: {{ source_files | length }}"
+      - "{% for filename in source_files.keys() %}{{ filename }}{% if not loop.last %}, {% endif %}{% endfor %}"
+  when: source_files | length > 0

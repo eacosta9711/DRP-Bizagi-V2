@@ -1,0 +1,117 @@
+---
+# Play 1: Validaciones en localhost
+- name: "Validaciones para Gestión de Tareas Programadas"
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+    - name: "(INFORMATIVO) - Validar parámetros requeridos"
+      ansible.builtin.assert:
+        that:
+          - active_environment is defined
+          - active_environment in ['produccion', 'contingencia']
+          - task_name is defined
+          - task_name | length > 0
+        fail_msg: |
+          ERROR: Parámetros requeridos faltantes:
+          - active_environment: debe ser 'produccion' o 'contingencia'
+          - task_name: nombre de la tarea programada a gestionar
+          Actual: active_environment={{ active_environment | default('NO DEFINIDO') }}
+          Actual: task_name={{ task_name | default('NO DEFINIDO') }}
+        success_msg: "OK: Parámetros definidos - {{ active_environment }} / {{ task_name }}"
+
+    - name: "(INFORMATIVO) - Validar que grupo bizagi_task_servers existe"
+      ansible.builtin.assert:
+        that:
+          - groups['bizagi_task_servers'] is defined
+          - groups['bizagi_task_servers'] | length == 2
+        fail_msg: |
+          ERROR: El grupo 'bizagi_task_servers' debe tener exactamente 2 servidores
+          Actual: {{ groups['bizagi_task_servers'] | default('NO DEFINIDO') }}
+        success_msg: "OK: Grupo bizagi_task_servers validado con {{ groups['bizagi_task_servers'] | length }} servidores"
+
+    - name: "Identificar servidores por rol"
+      ansible.builtin.set_fact:
+        prod_server:
+          "{{ groups['bizagi_task_servers'] | map('extract', hostvars)
+          | selectattr('server_role', 'equalto', 'produccion') | map(attribute='inventory_hostname') | first }}"
+        cont_server:
+          "{{ groups['bizagi_task_servers'] | map('extract', hostvars)
+          | selectattr('server_role', 'equalto', 'contingencia') | map(attribute='inventory_hostname') | first }}"
+
+    - name: "Mostrar configuración de la tarea"
+      ansible.builtin.debug:
+        msg:
+          - "════════════════════════════════════════════"
+          - "CONFIGURACIÓN TAREA PROGRAMADA"
+          - "════════════════════════════════════════════"
+          - "Tarea: {{ task_name }}"
+          - "Ambiente activo: {{ active_environment | upper }}"
+          - "────────────────────────────────────────────"
+          - "Servidor Producción: {{ prod_server }}"
+          - "Servidor Contingencia: {{ cont_server }}"
+          - "────────────────────────────────────────────"
+          - "{{ prod_server + ': ACTIVO' if active_environment == 'produccion' else prod_server + ': INACTIVO' }}"
+          - "{{ cont_server + ': ACTIVO' if active_environment == 'contingencia' else cont_server + ': INACTIVO' }}"
+          - "════════════════════════════════════════════"
+
+# Play 2: Gestión en servidores objetivo
+- name: "Gestión de Tareas Programadas"
+  hosts: bizagi_task_servers
+  gather_facts: true
+  serial: 1
+
+  vars:
+    server_role: "{{ hostvars[inventory_hostname].server_role }}"
+    should_be_enabled: >-
+      {{
+        (server_role == 'produccion' and active_environment == 'produccion') or
+        (server_role == 'contingencia' and active_environment == 'contingencia')
+      }}
+
+  tasks:
+    - name: "Mostrar configuración del servidor actual"
+      ansible.builtin.debug:
+        msg:
+          - "════════════════════════════════════════════"
+          - "PROCESANDO: {{ inventory_hostname | upper }}"
+          - "════════════════════════════════════════════"
+          - "Tarea: {{ task_name }}"
+          - "Rol del servidor: {{ server_role | upper }}"
+          - "Ambiente configurado: {{ active_environment | upper }}"
+          - "Debe estar activo: {{ 'SÍ' if should_be_enabled else 'NO' }}"
+          - "Estado deseado: {{ 'HABILITADA' if should_be_enabled else 'DESHABILITADA' }}"
+          - "════════════════════════════════════════════"
+
+    - name: "Ejecutar gestión de tarea programada"
+      ansible.builtin.include_role:
+        name: task_scheduler
+      vars:
+        task_scheduler_task_name: "{{ task_name }}"
+        task_scheduler_should_enable: "{{ should_be_enabled }}"
+        task_scheduler_server_role: "{{ server_role }}"
+        task_scheduler_active_environment: "{{ active_environment }}"
+
+# Play 3: Reporte Consolidado Final
+- name: "Reporte Consolidado Final"
+  hosts: localhost
+  gather_facts: true
+
+  tasks:
+    - name: "Mostrar resumen final"
+      ansible.builtin.debug:
+        msg:
+          - "╔═══════════════════════════════════════════════════════════════"
+          - "║              RESUMEN FINAL - TAREA PROGRAMADA                 "
+          - "╠═══════════════════════════════════════════════════════════════"
+          - "║ Tarea: {{ task_name }}"
+          - "║ Ambiente configurado: {{ active_environment | upper }}"
+          - "║ Fecha: {{ ansible_date_time.date }} {{ ansible_date_time.time }}"
+          - "╠═══════════════════════════════════════════════════════════════"
+          - "║ CONFIGURACIÓN ACTIVA/PASIVA:"
+          - "║"
+          - "║{% if active_environment == 'produccion' %} {{ hostvars['localhost']['prod_server'] }} (PRODUCCIÓN): ACTIVO
+            {% else %} {{ hostvars['localhost']['prod_server'] }} (PRODUCCIÓN): INACTIVO{% endif %}"
+          - "║{% if active_environment == 'contingencia' %} {{ hostvars['localhost']['cont_server'] }} (CONTINGENCIA): ACTIVO
+            {% else %} {{ hostvars['localhost']['cont_server'] }} (CONTINGENCIA): INACTIVO{% endif %}"
+          - "╚═══════════════════════════════════════════════════════════════"

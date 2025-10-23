@@ -1,0 +1,11 @@
+---
+# defaults file for roles/task_scheduler
+
+# Estado deseado
+task_scheduler_should_enable: false
+task_scheduler_server_role: "unknown"
+task_scheduler_active_environment: "unknown"
+
+# Configuración de validación
+task_scheduler_validate_script: true
+task_scheduler_show_details: true

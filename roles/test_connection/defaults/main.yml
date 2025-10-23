@@ -1,0 +1,16 @@
+---
+# defaults file for roles/test_connection
+
+# Hosts destino (debe ser definido en playbook)
+test_connection_target_hosts: []
+
+# Puertos a validar (solo para telnet)
+test_connection_ports: []
+
+# Configuración de timeouts
+test_connection_retries: 3
+test_connection_retry_delay: 2
+
+# Información de la tarea
+test_connection_task_id: "unknown"
+test_connection_task_description: "Connectivity check"

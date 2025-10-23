@@ -1,0 +1,18 @@
+---
+# tasks file for roles/cards
+- name: "Validar webhook URL este definida"
+  ansible.builtin.assert:
+    that:
+      - input_webhook_url is defined
+      - input_webhook_url | length > 0
+    fail_msg: |
+      ERROR: webhook URL no definida
+      Debes pasarla por variable
+    success_msg: "OK: Webhook URL configurada"
+  when:
+    - cards_notification_platform == "google_chat"
+
+- name: Include Google Chat notifications
+  ansible.builtin.include_tasks: google_chat.yml
+  when:
+    - cards_notification_platform == "google_chat"
