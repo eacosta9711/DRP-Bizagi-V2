@@ -1,0 +1,6 @@
+# inventory/bizagi_inventory.yml
+plugin: ini
+# Opcional, pero explícito:
+# strict: yes
+# sources:
+#   - hosts
